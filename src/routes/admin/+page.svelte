@@ -58,7 +58,13 @@
 				status = `Uploaded ${fileName} (binary #${data.binary.id}) — decompilation queued`;
 				reset();
 			} else {
-				errorMsg = res.status === 401 ? 'Invalid password' : 'Upload failed';
+				const body = await res.text().catch(() => '');
+				try {
+					const parsed = JSON.parse(body);
+					errorMsg = parsed.message || `Upload failed (${res.status})`;
+				} catch {
+					errorMsg = body || `Upload failed (${res.status})`;
+				}
 			}
 		} catch {
 			errorMsg = 'Upload failed';
