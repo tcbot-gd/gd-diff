@@ -34,6 +34,9 @@
 				<a href="/" class="rounded px-3 py-1.5 transition-colors hover:bg-surface-2 hover:text-fg"
 					>Explorer</a
 				>
+				<a href="/admin" class="rounded px-3 py-1.5 transition-colors hover:bg-surface-2 hover:text-fg"
+					>Admin</a
+				>
 			</div>
 		</nav>
 	</header>

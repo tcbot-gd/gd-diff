@@ -5,6 +5,7 @@
 	import { MergeView } from '@codemirror/merge';
 	import { cpp } from '@codemirror/lang-cpp';
 	import CodeReader from './CodeReader.svelte';
+	import { stripCasts } from './casts';
 	import type { FunctionContent, FunctionRow } from '$lib/shared/types';
 
 	interface FnRef extends FunctionRow {
@@ -24,6 +25,7 @@
 
 	let what = $state<'pseudocode' | 'asm' | 'members' | 'calls'>('pseudocode');
 	let mode = $state<'diff' | 'side'>('diff');
+	let hideCasts = $state(false);
 
 	let container = $state.raw<HTMLDivElement | undefined>(undefined);
 	let merge = $state.raw<MergeView | undefined>(undefined);
@@ -53,7 +55,7 @@
 	function text(kind: 'pseudocode' | 'asm', fn: FnRef): string {
 		if (!fn.content) return '// no content';
 		if (kind === 'pseudocode') {
-			const lines = fn.content.pseudocode.map((p) => p.text);
+			const lines = fn.content.pseudocode.map((p) => (hideCasts ? stripCasts(p.text) : p.text));
 			return lines.length ? lines.join('\n') : '// no pseudocode';
 		}
 		const lines = fn.content.asm.map((i) => `${i.mnemonic} ${i.operands}`.trim());
@@ -131,6 +133,11 @@
 			<label class="flex items-center gap-1.5">
 				<input type="radio" bind:group={mode} value="side" /> Side by side
 			</label>
+			{#if what === 'pseudocode'}
+				<label class="flex items-center gap-1.5">
+					<input type="checkbox" bind:checked={hideCasts} /> Hide casts
+				</label>
+			{/if}
 		{/if}
 	</div>
 

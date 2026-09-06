@@ -2,6 +2,7 @@
 	import { untrack } from 'svelte';
 	import CodeReader from './CodeReader.svelte';
 	import { PLATFORMS } from '$lib/shared/platforms';
+	import { stripCasts } from './casts';
 	import type { FunctionContent } from '$lib/shared/types';
 
 	interface Props {
@@ -27,6 +28,7 @@
 	let showPseudocode = $state(true);
 	let showAsm = $state(true);
 	let showHex = $state(false);
+	let hideCasts = $state(false);
 	let selectedAddr = $state<number | null>(untrack(() => initialAddr));
 
 	const content = $derived(fn.content);
@@ -35,7 +37,10 @@
 		(content?.asm ?? []).map((i) => ({ text: `${i.mnemonic} ${i.operands}`.trim(), addrs: [i.addr] }))
 	);
 	const pseudoLines = $derived(
-		(content?.pseudocode ?? []).map((p) => ({ text: p.text, addrs: p.addrs }))
+		(content?.pseudocode ?? []).map((p) => ({
+			text: hideCasts ? stripCasts(p.text) : p.text,
+			addrs: p.addrs
+		}))
 	);
 	const hexLines = $derived(
 		(content?.hex ?? []).map((h) => ({ text: `${h.bytes}  ${h.ascii}`, addrs: [h.addr] }))
@@ -172,6 +177,9 @@
 		</label>
 		<label class="flex items-center gap-1.5">
 			<input type="checkbox" bind:checked={showHex} /> Hex
+		</label>
+		<label class="flex items-center gap-1.5">
+			<input type="checkbox" bind:checked={hideCasts} /> Hide casts
 		</label>
 	</div>
 
