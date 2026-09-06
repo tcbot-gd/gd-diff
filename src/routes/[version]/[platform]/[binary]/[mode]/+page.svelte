@@ -61,7 +61,7 @@
 				</label>
 				<button
 					type="submit"
-					class="rounded-md border border-border bg-surface-2 px-3 py-1 text-sm text-fg hover:border-accent"
+					class="rounded-sm border border-border bg-surface-2 px-3 py-1 text-sm text-fg hover:border-accent"
 				>
 					Go
 				</button>
@@ -77,7 +77,7 @@
 	{:else if data.functions.length === 0}
 		<p class="text-sm text-muted">Decompiled, but no functions were indexed.</p>
 	{:else}
-		<ul class="divide-y divide-border overflow-hidden rounded-lg border border-border bg-surface">
+		<ul class="divide-y divide-border overflow-hidden rounded-sm border border-border bg-surface">
 			{#each data.functions as fn}
 				<li>
 					<a

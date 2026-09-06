@@ -177,7 +177,7 @@
 
 	<div class="grid gap-3" style={gridStyle}>
 		{#if showPseudocode}
-			<section class="overflow-hidden rounded-lg border border-border bg-surface">
+			<section class="overflow-hidden rounded-sm border border-border bg-surface">
 				<div class="border-b border-border px-3 py-1.5 text-xs font-medium text-muted">
 					Pseudocode
 				</div>
@@ -192,7 +192,7 @@
 			</section>
 		{/if}
 		{#if showAsm}
-			<section class="overflow-hidden rounded-lg border border-border bg-surface">
+			<section class="overflow-hidden rounded-sm border border-border bg-surface">
 				<div class="border-b border-border px-3 py-1.5 text-xs font-medium text-muted">
 					Assembly
 				</div>
@@ -202,7 +202,7 @@
 			</section>
 		{/if}
 		{#if showHex}
-			<section class="overflow-hidden rounded-lg border border-border bg-surface">
+			<section class="overflow-hidden rounded-sm border border-border bg-surface">
 				<div class="border-b border-border px-3 py-1.5 text-xs font-medium text-muted">Hex</div>
 				<div class="h-[70vh] p-2">
 					<CodeReader lines={hexLines} highlight={hexHighlight} onselect={onSelect} />
@@ -211,7 +211,7 @@
 		{/if}
 	</div>
 
-	<details class="rounded-lg border border-border bg-surface p-3">
+	<details class="rounded-sm border border-border bg-surface p-3">
 		<summary class="cursor-pointer text-sm text-muted">Compare against another version</summary>
 		<form class="mt-3 flex flex-wrap items-center gap-2" onsubmit={onCompare}>
 			<input
@@ -229,7 +229,7 @@
 			</select>
 			<button
 				type="submit"
-				class="rounded-md border border-border bg-surface-2 px-3 py-1 text-sm text-fg hover:border-accent"
+				class="rounded-sm border border-border bg-surface-2 px-3 py-1 text-sm text-fg hover:border-accent"
 			>
 				Find matches
 			</button>
@@ -253,7 +253,7 @@
 	{#if content && (content.calls.length > 0 || content.members.length > 0)}
 		<section class="grid gap-3 md:grid-cols-2">
 			{#if content.calls.length > 0}
-				<div class="rounded-lg border border-border bg-surface p-3">
+				<div class="rounded-sm border border-border bg-surface p-3">
 					<h3 class="text-xs font-medium uppercase tracking-wider text-muted">
 						Called functions
 					</h3>
@@ -265,7 +265,7 @@
 				</div>
 			{/if}
 			{#if content.members.length > 0}
-				<div class="rounded-lg border border-border bg-surface p-3">
+				<div class="rounded-sm border border-border bg-surface p-3">
 					<h3 class="text-xs font-medium uppercase tracking-wider text-muted">
 						Used members
 					</h3>

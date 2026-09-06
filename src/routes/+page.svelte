@@ -20,7 +20,7 @@
 		<h2 class="text-sm font-medium uppercase tracking-wider text-muted">Platforms</h2>
 		<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
 			{#each data.platforms as platform}
-				<div class="rounded-lg border border-border bg-surface p-3">
+				<div class="rounded-sm border border-border bg-surface p-3">
 					<div class="flex items-center justify-between gap-2">
 						<span class="font-mono text-xs font-semibold text-accent">{platform.id}</span>
 						<span class="text-[11px] text-muted">{platform.arch}</span>
@@ -40,7 +40,7 @@
 
 	<section class="space-y-3">
 		<h2 class="text-sm font-medium uppercase tracking-wider text-muted">Versions</h2>
-		<div class="overflow-x-auto rounded-lg border border-border">
+		<div class="overflow-x-auto rounded-sm border border-border">
 			<table class="w-full border-collapse text-sm">
 				<thead>
 					<tr class="border-b border-border bg-surface text-left">

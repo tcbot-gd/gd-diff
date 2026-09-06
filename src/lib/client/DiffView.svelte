@@ -136,7 +136,7 @@
 
 	{#if what === 'members' || what === 'calls'}
 		<div class="grid gap-3 md:grid-cols-2">
-			<section class="rounded-lg border border-border bg-surface p-3">
+			<section class="rounded-sm border border-border bg-surface p-3">
 				<h3 class="text-xs font-medium uppercase tracking-wider text-muted">A — {aName}</h3>
 				<ul class="mt-2 space-y-1">
 					{#if what === 'members'}
@@ -153,7 +153,7 @@
 					<p class="mt-1 text-xs text-muted">no unique items</p>
 				{/if}
 			</section>
-			<section class="rounded-lg border border-border bg-surface p-3">
+			<section class="rounded-sm border border-border bg-surface p-3">
 				<h3 class="text-xs font-medium uppercase tracking-wider text-muted">B — {bName}</h3>
 				<ul class="mt-2 space-y-1">
 					{#if what === 'members'}
@@ -172,12 +172,12 @@
 			</section>
 		</div>
 	{:else if mode === 'diff'}
-		<div class="overflow-hidden rounded-lg border border-border bg-surface p-2">
+		<div class="overflow-hidden rounded-sm border border-border bg-surface p-2">
 			<div bind:this={container} class="max-h-[75vh] overflow-auto"></div>
 		</div>
 	{:else}
 		<div class="grid gap-3 md:grid-cols-2">
-			<section class="overflow-hidden rounded-lg border border-border bg-surface">
+			<section class="overflow-hidden rounded-sm border border-border bg-surface">
 				<div class="border-b border-border px-3 py-1.5 text-xs font-medium text-muted">
 					A — {aName}
 				</div>
@@ -191,7 +191,7 @@
 					/>
 				</div>
 			</section>
-			<section class="overflow-hidden rounded-lg border border-border bg-surface">
+			<section class="overflow-hidden rounded-sm border border-border bg-surface">
 				<div class="border-b border-border px-3 py-1.5 text-xs font-medium text-muted">
 					B — {bName}
 				</div>

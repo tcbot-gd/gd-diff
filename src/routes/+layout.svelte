@@ -27,16 +27,11 @@
 <div class="flex min-h-dvh flex-col">
 	<header class="sticky top-0 z-40 border-b border-border bg-bg/85 backdrop-blur">
 		<nav class="mx-auto flex h-14 w-full max-w-7xl items-center gap-4 px-4">
-			<a href="/" class="flex items-center gap-2.5 font-semibold tracking-tight text-fg">
-				<span
-					class="grid h-7 w-7 place-items-center rounded-md bg-accent/15 font-mono text-xs font-bold text-accent"
-				>
-					GD
-				</span>
-				<span class="text-sm">gd-diff</span>
+			<a href="/" class="font-mono text-sm font-semibold tracking-tight text-fg">
+				gd<span class="text-accent">·diff</span>
 			</a>
 			<div class="ml-auto flex items-center gap-1 text-sm text-muted">
-				<a href="/" class="rounded-md px-3 py-1.5 transition-colors hover:bg-surface-2 hover:text-fg"
+				<a href="/" class="rounded px-3 py-1.5 transition-colors hover:bg-surface-2 hover:text-fg"
 					>Explorer</a
 				>
 			</div>

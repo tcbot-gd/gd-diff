@@ -17,7 +17,7 @@
 	label: string,
 	decompilations: { mode: string; status: string }[] | undefined
 )}
-	<div class="rounded-lg border border-border bg-surface p-4">
+	<div class="rounded-sm border border-border bg-surface p-4">
 		<div class="flex items-start justify-between gap-3">
 			<div class="min-w-0">
 				<div class="truncate font-mono text-sm">{fileName}</div>
@@ -31,17 +31,17 @@
 				{#if d?.status === 'done'}
 					<a
 						href="/{data.version.id}/{data.platform.id}/{encodeURIComponent(fileName)}/{mode.id}"
-						class="rounded-md border border-border bg-surface-2 px-2.5 py-1 font-mono text-[11px] text-ok hover:border-accent"
+						class="rounded-sm border border-border bg-surface-2 px-2.5 py-1 font-mono text-[11px] text-ok hover:border-accent"
 					>
 						{mode.id} ✓
 					</a>
 				{:else if d}
-					<span class="rounded-md border border-border px-2.5 py-1 font-mono text-[11px] text-muted">
+					<span class="rounded-sm border border-border px-2.5 py-1 font-mono text-[11px] text-muted">
 						{mode.id} · {d.status}
 					</span>
 				{:else}
 					<span
-						class="rounded-md border border-dashed border-border px-2.5 py-1 font-mono text-[11px] text-muted/50"
+						class="rounded-sm border border-dashed border-border px-2.5 py-1 font-mono text-[11px] text-muted/50"
 					>
 						{mode.id} — not uploaded
 					</span>
