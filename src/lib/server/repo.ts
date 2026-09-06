@@ -64,6 +64,7 @@ export function listDecompilations(binaryId: number): DecompilationRow[] {
 				binary_id AS binaryId,
 				mode,
 				bindings_commit AS bindingsCommit,
+				image_base AS imageBase,
 				status,
 				error,
 				created_at AS createdAt,
@@ -84,6 +85,7 @@ export function getDecompilation(id: number): DecompilationRow | null {
 					binary_id AS binaryId,
 					mode,
 					bindings_commit AS bindingsCommit,
+					image_base AS imageBase,
 					status,
 					error,
 					created_at AS createdAt,
@@ -218,6 +220,7 @@ export function getBinaryByRef(
 
 export interface FunctionContext extends FunctionWithContent {
 	mode: DecompMode;
+	imageBase: number | null;
 	binaryId: number;
 	versionId: string;
 	platformId: string;
@@ -238,6 +241,7 @@ export function getFunctionContext(functionId: number): FunctionContext | null {
 				f.type_signature AS typeSignature,
 				c.content,
 				d.mode,
+				d.image_base AS imageBase,
 				d.binary_id AS binaryId,
 				b.version_id AS versionId,
 				b.platform_id AS platformId,
@@ -253,6 +257,7 @@ export function getFunctionContext(functionId: number): FunctionContext | null {
 		| (FunctionRow & {
 				content: string | null;
 				mode: DecompMode;
+				imageBase: number | null;
 				binaryId: number;
 				versionId: string;
 				platformId: string;
@@ -298,4 +303,25 @@ export function findFunctionsByName(
 			LIMIT 50`
 		)
 		.all(decomp.id, name, name) as unknown as FunctionRow[];
+}
+
+export function findFunctionByAddress(decompilationId: number, address: number): FunctionRow | null {
+	return (
+		(getDb()
+			.prepare(
+				`SELECT
+					id,
+					decompilation_id AS decompilationId,
+					name,
+					demangled_name AS demangledName,
+					address,
+					size,
+					type_signature AS typeSignature
+				FROM functions
+				WHERE decompilation_id = ? AND address <= ? AND ? < address + size
+				ORDER BY address DESC
+				LIMIT 1`
+			)
+			.get(decompilationId, address, address) as unknown as FunctionRow | undefined) ?? null
+	);
 }

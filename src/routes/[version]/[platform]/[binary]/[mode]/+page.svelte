@@ -1,11 +1,36 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
+
+	let goAddr = $state('');
+	let goRva = $state(false);
+	let goError = $state<string | null>(null);
+
+	async function onGo(event: SubmitEvent) {
+		event.preventDefault();
+		goError = null;
+		if (!data.decompilation) return;
+		const params = new URLSearchParams({
+			decompilation: String(data.decompilation.id),
+			addr: goAddr,
+			rva: goRva ? '1' : '0'
+		});
+		const res = await fetch(`/api/functions/by-address?${params}`);
+		if (!res.ok) {
+			goError = 'No function at this address';
+			return;
+		}
+		const body = (await res.json()) as { function: { id: number }; address: number };
+		await goto(
+			`/${data.version.id}/${data.platform.id}/${encodeURIComponent(data.binary.fileName)}/${data.decompilation.mode}/fn/${body.function.id}?addr=0x${body.address.toString(16)}`
+		);
+	}
 </script>
 
 <div class="space-y-6">
-	<header class="space-y-1">
+	<header class="space-y-2">
 		<a href="/{data.version.id}/{data.platform.id}" class="text-xs text-muted hover:text-fg"
 			>← {data.platform.id} binaries</a
 		>
@@ -23,6 +48,25 @@
 					<span class="ml-2 font-mono text-xs">{data.decompilation.bindingsCommit}</span>
 				{/if}
 			</p>
+		{/if}
+		{#if data.decompilation?.status === 'done'}
+			<form class="flex flex-wrap items-center gap-2" onsubmit={onGo}>
+				<input
+					bind:value={goAddr}
+					placeholder="Go to address (hex)"
+					class="rounded border border-border bg-surface-2 px-2 py-1 font-mono text-sm text-fg"
+				/>
+				<label class="flex items-center gap-1.5 text-sm text-muted">
+					<input type="checkbox" bind:checked={goRva} /> RVA
+				</label>
+				<button
+					type="submit"
+					class="rounded-md border border-border bg-surface-2 px-3 py-1 text-sm text-fg hover:border-accent"
+				>
+					Go
+				</button>
+				{#if goError}<span class="text-xs text-warn">{goError}</span>{/if}
+			</form>
 		{/if}
 	</header>
 

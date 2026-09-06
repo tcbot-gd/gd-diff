@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS decompilations (
 	binary_id INTEGER NOT NULL REFERENCES binaries(id) ON DELETE CASCADE,
 	mode TEXT NOT NULL,
 	bindings_commit TEXT,
+	image_base INTEGER,
 	status TEXT NOT NULL DEFAULT 'pending',
 	error TEXT,
 	created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
@@ -114,9 +115,17 @@ export function initDb(): DatabaseSync {
 	database.exec('PRAGMA journal_mode = WAL;');
 	database.exec('PRAGMA foreign_keys = ON;');
 	database.exec(SCHEMA);
+	migrate(database);
 	seed(database);
 	db = database;
 	return database;
+}
+
+function migrate(database: DatabaseSync): void {
+	const columns = database.prepare('PRAGMA table_info(decompilations)').all() as { name: string }[];
+	if (!columns.some((c) => c.name === 'image_base')) {
+		database.exec('ALTER TABLE decompilations ADD COLUMN image_base INTEGER');
+	}
 }
 
 function seed(database: DatabaseSync): void {

@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import { getDb } from '../src/lib/server/db';
 import { env } from '../src/lib/server/env';
@@ -89,6 +89,16 @@ function runIda(decomp: PendingDecomp): Promise<void> {
 	});
 }
 
+function readImageBase(metaPath: string): number | null {
+	try {
+		if (!existsSync(metaPath)) return null;
+		const meta = JSON.parse(readFileSync(metaPath, 'utf-8'));
+		return typeof meta.image_base === 'number' ? meta.image_base : null;
+	} catch {
+		return null;
+	}
+}
+
 async function processNext(): Promise<boolean> {
 	const decomp = claimPending();
 	if (!decomp) return false;
@@ -98,8 +108,10 @@ async function processNext(): Promise<boolean> {
 	);
 	try {
 		await runIda(decomp);
-		const ndjson = path.join(config.exportsDir, String(decomp.id), 'functions.ndjson');
-		const count = await ingestDecompilation(decomp.id, ndjson);
+		const outDir = path.join(config.exportsDir, String(decomp.id));
+		const ndjson = path.join(outDir, 'functions.ndjson');
+		const imageBase = readImageBase(path.join(outDir, 'meta.json'));
+		const count = await ingestDecompilation(decomp.id, ndjson, imageBase);
 		console.log(`[worker] done #${decomp.id}: ${count} functions`);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);

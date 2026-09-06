@@ -34,6 +34,7 @@ export interface DecompilationRow {
 	binaryId: number;
 	mode: DecompMode;
 	bindingsCommit: string | null;
+	imageBase: number | null;
 	status: DecompStatus;
 	error: string | null;
 	createdAt: string;

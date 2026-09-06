@@ -18,7 +18,8 @@ interface ExportRecord {
 
 export async function ingestDecompilation(
 	decompilationId: number,
-	ndjsonPath: string
+	ndjsonPath: string,
+	imageBase?: number | null
 ): Promise<number> {
 	if (!existsSync(ndjsonPath)) {
 		throw new Error(`export file not found: ${ndjsonPath}`);
@@ -36,7 +37,7 @@ export async function ingestDecompilation(
 		'INSERT OR IGNORE INTO member_uses (decompilation_id, function_id, owner_type, member_name, member_kind) VALUES (?, ?, ?, ?, ?)'
 	);
 	const markDone = db.prepare(
-		"UPDATE decompilations SET status = 'done', error = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?"
+		"UPDATE decompilations SET status = 'done', error = NULL, image_base = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?"
 	);
 
 	db.exec('BEGIN');
@@ -75,7 +76,7 @@ export async function ingestDecompilation(
 			}
 			count++;
 		}
-		markDone.run(decompilationId);
+		markDone.run(imageBase ?? null, decompilationId);
 		db.exec('COMMIT');
 	} catch (error) {
 		db.exec('ROLLBACK');

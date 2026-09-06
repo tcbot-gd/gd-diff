@@ -13,6 +13,7 @@
 			size: number;
 			typeSignature: string | null;
 			content: FunctionContent | null;
+			imageBase: number | null;
 			versionId: string;
 			platformId: string;
 			fileName: string;
@@ -111,6 +112,22 @@
 	const displayName = $derived(fn.demangledName ?? fn.name);
 	const paneCount = $derived((showPseudocode ? 1 : 0) + (showAsm ? 1 : 0) + (showHex ? 1 : 0));
 	const gridStyle = $derived(`grid-template-columns: repeat(${paneCount}, minmax(0, 1fr))`);
+
+	const rva = $derived(fn.imageBase != null ? fn.address - fn.imageBase : null);
+	let copied = $state<string | null>(null);
+
+	async function copyAddress(kind: 'rva' | 'addr') {
+		let text: string;
+		if (kind === 'rva' && rva != null) text = '0x' + rva.toString(16);
+		else text = '0x' + fn.address.toString(16);
+		try {
+			await navigator.clipboard.writeText(text);
+			copied = (kind === 'rva' ? 'RVA ' : '') + text;
+			setTimeout(() => (copied = null), 1500);
+		} catch {
+			// clipboard unavailable
+		}
+	}
 </script>
 
 <div class="space-y-4">
@@ -121,10 +138,25 @@
 		>
 			← {fn.versionId}/{fn.platformId}/{fn.fileName} · {fn.mode}
 		</a>
-		<div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+		<div class="flex flex-wrap items-center gap-x-3 gap-y-1">
 			<h1 class="font-mono text-lg font-semibold tracking-tight text-fg">{displayName}</h1>
-			<span class="font-mono text-xs text-muted">0x{fn.address.toString(16)}</span>
 			<span class="text-xs text-muted">{fn.size} B</span>
+			<button
+				onclick={() => copyAddress('rva')}
+				disabled={rva == null}
+				class="rounded border border-border bg-surface-2 px-2 py-0.5 font-mono text-xs text-fg hover:border-accent disabled:opacity-40"
+				title="Copy RVA"
+			>
+				{#if rva != null}RVA 0x{rva.toString(16)}{:else}—{/if}
+			</button>
+			<button
+				onclick={() => copyAddress('addr')}
+				class="rounded border border-border bg-surface-2 px-2 py-0.5 font-mono text-xs text-muted hover:border-accent"
+				title="Copy address"
+			>
+				0x{fn.address.toString(16)}
+			</button>
+			{#if copied}<span class="text-xs text-ok">{copied} copied</span>{/if}
 		</div>
 		{#if fn.demangledName && fn.demangledName !== fn.name}
 			<p class="font-mono text-xs text-muted">{fn.name}</p>

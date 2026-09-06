@@ -246,6 +246,10 @@ def main():
     except Exception:
         pass
 
+    import ida_auto
+
+    ida_auto.auto_wait()
+
     if not os.path.isdir(OUT):
         os.makedirs(OUT, exist_ok=True)
 
@@ -279,10 +283,19 @@ def main():
             if count % 1000 == 0:
                 print("[export] %d functions" % count)
 
+    image_base = None
+    try:
+        import ida_nalt
+
+        image_base = ida_nalt.get_imagebase()
+    except Exception:
+        pass
+
     meta = {
         "mode": MODE,
         "input": idaapi.get_input_file_path(),
         "idb": idaapi.get_path(idaapi.PATH_TYPE_IDB),
+        "image_base": image_base,
         "functions": count,
     }
     with open(os.path.join(OUT, "meta.json"), "w", encoding="utf-8") as fh:
