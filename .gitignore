@@ -8,6 +8,7 @@ node_modules
 /.svelte-kit
 /build
 /data
+/ida
 
 # OS
 .DS_Store
