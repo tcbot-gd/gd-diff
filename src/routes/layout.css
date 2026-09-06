@@ -43,3 +43,28 @@ a {
 ::selection {
 	background: rgba(76, 141, 255, 0.3);
 }
+
+/* CodeMirror code reader */
+.codereader {
+	height: 100%;
+	overflow: hidden;
+}
+
+.codereader .cm-editor {
+	height: 100%;
+	font-family: var(--font-mono);
+	font-size: 12px;
+}
+
+.codereader .cm-editor.cm-focused {
+	outline: none;
+}
+
+.cm-highlight-line {
+	background: rgba(76, 141, 255, 0.14);
+}
+
+.cm-addr {
+	color: var(--color-muted);
+	padding-right: 8px;
+}

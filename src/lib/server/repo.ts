@@ -3,12 +3,15 @@ import type {
 	BinaryRow,
 	BinaryWithStatus,
 	DecompilationRow,
+	FunctionContent,
 	FunctionRow,
 	FunctionWithContent,
 	PlatformRow,
 	VersionRow,
 	VersionPlatformMatrix
 } from '../shared/types';
+import type { BinaryRole } from '../shared/platforms';
+import type { DecompMode } from '../shared/modes';
 
 export function listPlatforms(): PlatformRow[] {
 	return getDb().prepare('SELECT id, label, arch, ord FROM platforms ORDER BY ord').all() as unknown as PlatformRow[];
@@ -211,4 +214,58 @@ export function getBinaryByRef(
 			)
 			.get(versionId, platformId, fileName) as unknown as BinaryRow | undefined) ?? null
 	);
+}
+
+export interface FunctionContext extends FunctionWithContent {
+	mode: DecompMode;
+	binaryId: number;
+	versionId: string;
+	platformId: string;
+	fileName: string;
+	role: BinaryRole;
+}
+
+export function getFunctionContext(functionId: number): FunctionContext | null {
+	const row = getDb()
+		.prepare(
+			`SELECT
+				f.id,
+				f.decompilation_id AS decompilationId,
+				f.name,
+				f.demangled_name AS demangledName,
+				f.address,
+				f.size,
+				f.type_signature AS typeSignature,
+				c.content,
+				d.mode,
+				d.binary_id AS binaryId,
+				b.version_id AS versionId,
+				b.platform_id AS platformId,
+				b.file_name AS fileName,
+				b.role
+			FROM functions f
+			JOIN decompilations d ON d.id = f.decompilation_id
+			JOIN binaries b ON b.id = d.binary_id
+			LEFT JOIN function_content c ON c.function_id = f.id
+			WHERE f.id = ?`
+		)
+		.get(functionId) as unknown as
+		| (FunctionRow & {
+				content: string | null;
+				mode: DecompMode;
+				binaryId: number;
+				versionId: string;
+				platformId: string;
+				fileName: string;
+				role: BinaryRole;
+		  })
+		| undefined;
+
+	if (!row) return null;
+
+	const { content, ...fn } = row;
+	return {
+		...fn,
+		content: content ? (JSON.parse(content) as FunctionContent) : null
+	};
 }
