@@ -240,12 +240,13 @@ def apply_broma_bindings():
     print("[export] broma mode requested; bindings application is a stub")
 
 
-def write_progress(phase, done, total, current=None):
+def write_progress(phase, done, total, current=None, current_size=None):
     payload = {
         "phase": phase,
         "functions_done": done,
         "functions_total": total,
         "current_function": current,
+        "current_function_size": current_size,
         "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
     try:
@@ -305,12 +306,16 @@ def main():
                 or ida_name.get_name(func.start_ea)
                 or ("sub_%X" % func.start_ea)
             )
+            size = func.end_ea - func.start_ea
+            # Report before decompiling so the UI shows the function currently
+            # being worked on (a single huge function can take a long time).
+            write_progress("decompiling", count, total, name, size)
             cfunc = decompile(func)
             record = {
                 "name": name,
                 "demangled": demangle(name),
                 "address": func.start_ea,
-                "size": func.end_ea - func.start_ea,
+                "size": size,
                 "signature": get_signature(func),
                 "asm": export_asm(func),
                 "hex": export_hex(func),
@@ -321,7 +326,6 @@ def main():
             fh.write(json.dumps(record, ensure_ascii=False) + "\n")
             count += 1
             if count % 100 == 0:
-                write_progress("decompiling", count, total, name)
                 print("[export] %d / %d functions" % (count, total))
 
     image_base = None

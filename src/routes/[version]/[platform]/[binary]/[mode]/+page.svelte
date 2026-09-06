@@ -186,7 +186,14 @@
 						{/if}
 					</div>
 					{#if liveProgress.currentFunction}
-						<div class="truncate font-mono text-[11px] text-muted">now: {liveProgress.currentFunction}</div>
+						<div class="truncate font-mono text-[11px] text-muted">
+							now: {liveProgress.currentFunction}
+							{#if liveProgress.currentFunctionSize !== null}
+								<span class="text-muted/60">
+									({liveProgress.currentFunctionSize.toLocaleString()} B)</span
+								>
+							{/if}
+						</div>
 					{/if}
 					{#if liveProgress.phase === 'analyzing'}
 						<p class="text-[11px] text-muted">

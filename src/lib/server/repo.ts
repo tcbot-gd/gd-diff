@@ -34,6 +34,7 @@ function parseProgress(raw: string | null | undefined): DecompilationProgress | 
 			functions_done?: number;
 			functions_total?: number | null;
 			current_function?: string | null;
+			current_function_size?: number;
 			log_tail?: unknown;
 			updated_at?: string;
 		};
@@ -45,6 +46,7 @@ function parseProgress(raw: string | null | undefined): DecompilationProgress | 
 			functionsDone: p.functions_done ?? 0,
 			functionsTotal: p.functions_total ?? null,
 			currentFunction: p.current_function ?? null,
+			currentFunctionSize: typeof p.current_function_size === 'number' ? p.current_function_size : null,
 			logTail,
 			updatedAt: p.updated_at ?? ''
 		};
