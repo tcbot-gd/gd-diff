@@ -19,5 +19,13 @@ export default defineConfig({
 				trustedOrigins: ['*']
 			}
 		})
-	]
+	],
+	server: {
+		watch: {
+			// `data/` holds the SQLite db, uploads, and IDA's working files
+			// (`.id0`/`.id1`/`.nam`/`.til`), which IDA locks while decompiling.
+			// Watching them crashes the dev server with EBUSY on Windows.
+			ignored: ['**/data/**']
+		}
+	}
 });
