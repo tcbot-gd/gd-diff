@@ -1,42 +1,39 @@
-# sv
+# gd-diff
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+Web decompilation diff/source viewer for the Geometry Dash modding community. The server runs
+IDA Pro (headless) to decompile game binaries; the browser renders assembly, pseudocode and hex
+views plus cross-version diffs.
 
-## Creating a project
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design.
 
-If you're seeing this, you've probably already done this step. Congrats!
+## Stack
 
-```sh
-# create a new project
-npx sv create my-app
-```
-
-To recreate this project with the same configuration:
-
-```sh
-# recreate this project
-bun x sv@0.17.0 create --template minimal --types ts --add prettier tailwindcss="plugins:none" --install bun gd-diff
-```
+- SvelteKit 5 (runes mode) + Bun
+- SQLite via `node:sqlite` (embedded, WAL mode)
+- Tailwind CSS 4
+- Docker / docker-compose for production
 
 ## Developing
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
 ```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+bun install
+bun run dev
 ```
 
-## Building
-
-To create a production version of your app:
+## Build & run
 
 ```sh
-npm run build
+bun run build
+bun build/index.js
 ```
 
-You can preview the production build with `npm run preview`.
+## Decompilation pipeline (worker)
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+The `worker` process polls for pending decompilations and invokes IDA Pro headless. Provide IDA
+Pro and the BromaIDA plugin by mounting them into the worker container (see `compose.yaml`).
+
+## Configuration
+
+Copy `.env.example` to `.env` and adjust. The admin password, IDA paths and the geode-sdk
+bindings repo are all configured there.
+

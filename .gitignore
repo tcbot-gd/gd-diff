@@ -7,10 +7,14 @@ node_modules
 .wrangler
 /.svelte-kit
 /build
+/data
 
 # OS
 .DS_Store
 Thumbs.db
+
+# Logs
+*.log
 
 # Env
 .env

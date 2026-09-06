@@ -1,0 +1,43 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATA_DIR: /data
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change-me}
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3000}
+    volumes:
+      - gd-data:/data
+    ports:
+      - "3000:3000"
+    # When fronted by nginx-proxy + acme-companion, drop `ports` above and expose
+    # labels instead, e.g.:
+    #   expose: ["3000"]
+    #   environment:
+    #     VIRTUAL_HOST: ${DOMAIN}
+    #     VIRTUAL_PORT: 3000
+    #     LETSENCRYPT_HOST: ${DOMAIN}
+
+  worker:
+    build: .
+    command: ["bun", "worker/index.ts"]
+    restart: unless-stopped
+    environment:
+      DATA_DIR: /data
+      IDA64_PATH: /opt/ida/idat64
+      IDA32_PATH: /opt/ida/idat
+      BROMA_PLUGIN_DIR: /opt/ida/plugins
+      BINDINGS_REPO_URL: ${BINDINGS_REPO_URL:-https://github.com/geode-sdk/bindings}
+      BINDINGS_COMMIT: ${BINDINGS_COMMIT:-}
+    volumes:
+      - gd-data:/data
+      # Provide IDA Pro + BromaIDA plugin here (admin supplied):
+      - ${IDA_HOST_DIR:-./ida}:/opt/ida:ro
+    depends_on:
+      - app
+
+volumes:
+  gd-data:

@@ -1,0 +1,9 @@
+node_modules
+build
+.svelte-kit
+.git
+data
+.env
+.env.*
+! .env.example
+*.log
