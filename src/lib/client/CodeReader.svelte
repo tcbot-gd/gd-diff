@@ -27,9 +27,11 @@
 		highlight: Set<number>;
 		onselect?: (addr: number | null) => void;
 		language?: 'cpp' | 'asm' | 'text';
+		baseAddr?: number;
+		imageBase?: number | null;
 	}
 
-	let { lines, highlight, onselect, language = 'text' }: Props = $props();
+	let { lines, highlight, onselect, language = 'text', baseAddr, imageBase }: Props = $props();
 
 	let container: HTMLDivElement;
 	let view: EditorView | undefined;
@@ -59,7 +61,7 @@
 			const number = view.state.doc.lineAt(line.from).number;
 			const addrs = lineAddrs.get(number);
 			if (!addrs || addrs.length === 0) return null;
-			return new AddrMarker('0x' + addrs[0].toString(16));
+			return new AddrMarker(addrLabel(addrs[0]));
 		},
 		initialSpacer: () => new AddrMarker('')
 	});
@@ -85,6 +87,42 @@
 		return builder.finish();
 	}
 
+	function addrLabel(addr: number): string {
+		if (baseAddr != null) {
+			const off = addr - baseAddr;
+			return (off >= 0 ? '+' : '-') + '0x' + Math.abs(off).toString(16);
+		}
+		return '0x' + addr.toString(16);
+	}
+
+	let menu = $state<{ x: number; y: number; addr: number } | null>(null);
+	let copied = $state<string | null>(null);
+
+	function onContextMenu(event: MouseEvent, cmView: EditorView): boolean {
+		const pos = cmView.posAtCoords({ x: event.clientX, y: event.clientY });
+		if (pos == null) return false;
+		const line = cmView.state.doc.lineAt(pos).number;
+		const addrs = lineAddrs.get(line);
+		if (!addrs || addrs.length === 0) return false;
+		event.preventDefault();
+		menu = { x: event.clientX, y: event.clientY, addr: addrs[0] };
+		return true;
+	}
+
+	async function copyLine(kind: 'addr' | 'rva') {
+		if (!menu) return;
+		let text = '0x' + menu.addr.toString(16);
+		if (kind === 'rva' && imageBase != null) text = '0x' + (menu.addr - imageBase).toString(16);
+		try {
+			await navigator.clipboard.writeText(text);
+			copied = text;
+			setTimeout(() => (copied = null), 1200);
+		} catch {
+			// clipboard unavailable
+		}
+		menu = null;
+	}
+
 	const darkTheme = EditorView.theme({
 		'&': { backgroundColor: 'transparent', color: '#dbe1ea' },
 		'.cm-content': { caretColor: '#4c8dff' },
@@ -106,6 +144,11 @@
 			EditorView.editable.of(false),
 			EditorView.lineWrapping,
 			darkTheme,
+			EditorView.domEventHandlers({
+				contextmenu(event, cmView) {
+					return onContextMenu(event, cmView);
+				}
+			}),
 			EditorView.updateListener.of((update) => {
 				if (update.selectionSet) {
 					const line = update.state.doc.lineAt(update.state.selection.main.head).number;
@@ -130,4 +173,33 @@
 	});
 </script>
 
+<svelte:window onclick={() => (menu = null)} />
+
 <div bind:this={container} class="codereader"></div>
+
+{#if menu}
+	<div
+		class="fixed z-50 min-w-[180px] overflow-hidden rounded-sm border border-border bg-surface-2 py-1 shadow-lg"
+		style="left: {menu.x}px; top: {menu.y}px"
+	>
+		<button
+			onclick={() => copyLine('rva')}
+			class="block w-full px-3 py-1.5 text-left font-mono text-xs text-fg hover:bg-surface"
+		>
+			Copy RVA {#if imageBase != null}0x{(menu.addr - imageBase).toString(16)}{/if}
+		</button>
+		<button
+			onclick={() => copyLine('addr')}
+			class="block w-full px-3 py-1.5 text-left font-mono text-xs text-fg hover:bg-surface"
+		>
+			Copy address 0x{menu.addr.toString(16)}
+		</button>
+	</div>
+{/if}
+{#if copied}
+	<div
+		class="fixed bottom-4 right-4 z-50 rounded-sm border border-border bg-surface-2 px-3 py-1.5 font-mono text-xs text-ok"
+	>
+		{copied} copied
+	</div>
+{/if}

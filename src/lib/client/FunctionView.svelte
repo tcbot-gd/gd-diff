@@ -187,6 +187,8 @@
 						highlight={pseudoHighlight}
 						onselect={onSelect}
 						language="cpp"
+						baseAddr={fn.address}
+						imageBase={fn.imageBase}
 					/>
 				</div>
 			</section>
@@ -197,7 +199,13 @@
 					Assembly
 				</div>
 				<div class="h-[70vh] p-2">
-					<CodeReader lines={asmLines} highlight={asmHighlight} onselect={onSelect} />
+					<CodeReader
+						lines={asmLines}
+						highlight={asmHighlight}
+						onselect={onSelect}
+						baseAddr={fn.address}
+						imageBase={fn.imageBase}
+					/>
 				</div>
 			</section>
 		{/if}
@@ -205,7 +213,13 @@
 			<section class="overflow-hidden rounded-sm border border-border bg-surface">
 				<div class="border-b border-border px-3 py-1.5 text-xs font-medium text-muted">Hex</div>
 				<div class="h-[70vh] p-2">
-					<CodeReader lines={hexLines} highlight={hexHighlight} onselect={onSelect} />
+					<CodeReader
+						lines={hexLines}
+						highlight={hexHighlight}
+						onselect={onSelect}
+						baseAddr={fn.address}
+						imageBase={fn.imageBase}
+					/>
 				</div>
 			</section>
 		{/if}
