@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import CodeReader from './CodeReader.svelte';
+	import { PLATFORMS } from '$lib/shared/platforms';
 	import type { FunctionContent } from '$lib/shared/types';
 
 	interface Props {
 		fn: {
+			id: number;
 			name: string;
 			demangledName: string | null;
 			address: number;
@@ -79,6 +81,33 @@
 		history.replaceState(null, '', url.toString());
 	}
 
+	let targetVersion = $state('');
+	let targetPlatform = $state('android64');
+	let matches = $state<{ id: number; name: string; demangledName: string | null }[]>([]);
+	let compareError = $state<string | null>(null);
+
+	async function onCompare(event: SubmitEvent) {
+		event.preventDefault();
+		matches = [];
+		compareError = null;
+		const params = new URLSearchParams({
+			name: fn.name,
+			version: targetVersion,
+			platform: targetPlatform,
+			fileName: fn.fileName,
+			mode: fn.mode
+		});
+		const res = await fetch(`/api/functions/match?${params}`);
+		if (!res.ok) {
+			compareError = 'No matches found';
+			return;
+		}
+		const data = (await res.json()) as {
+			functions: { id: number; name: string; demangledName: string | null }[];
+		};
+		matches = data.functions;
+	}
+
 	const displayName = $derived(fn.demangledName ?? fn.name);
 	const paneCount = $derived((showPseudocode ? 1 : 0) + (showAsm ? 1 : 0) + (showHex ? 1 : 0));
 	const gridStyle = $derived(`grid-template-columns: repeat(${paneCount}, minmax(0, 1fr))`);
@@ -149,6 +178,45 @@
 			</section>
 		{/if}
 	</div>
+
+	<details class="rounded-lg border border-border bg-surface p-3">
+		<summary class="cursor-pointer text-sm text-muted">Compare against another version</summary>
+		<form class="mt-3 flex flex-wrap items-center gap-2" onsubmit={onCompare}>
+			<input
+				bind:value={targetVersion}
+				placeholder="version (e.g. 2.207)"
+				class="rounded border border-border bg-surface-2 px-2 py-1 font-mono text-sm text-fg"
+			/>
+			<select
+				bind:value={targetPlatform}
+				class="rounded border border-border bg-surface-2 px-2 py-1 text-sm text-fg"
+			>
+				{#each PLATFORMS as platform}
+					<option value={platform.id}>{platform.label}</option>
+				{/each}
+			</select>
+			<button
+				type="submit"
+				class="rounded-md border border-border bg-surface-2 px-3 py-1 text-sm text-fg hover:border-accent"
+			>
+				Find matches
+			</button>
+		</form>
+		{#if compareError}
+			<p class="mt-2 text-xs text-warn">{compareError}</p>
+		{/if}
+		{#if matches.length > 0}
+			<ul class="mt-2 space-y-1">
+				{#each matches as match}
+					<li>
+						<a href="/diff/{fn.id}/{match.id}" class="font-mono text-xs text-accent hover:underline">
+							{match.demangledName ?? match.name}
+						</a>
+					</li>
+				{/each}
+			</ul>
+		{/if}
+	</details>
 
 	{#if content && (content.calls.length > 0 || content.members.length > 0)}
 		<section class="grid gap-3 md:grid-cols-2">

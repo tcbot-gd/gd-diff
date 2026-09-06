@@ -269,3 +269,33 @@ export function getFunctionContext(functionId: number): FunctionContext | null {
 		content: content ? (JSON.parse(content) as FunctionContent) : null
 	};
 }
+
+export function findFunctionsByName(
+	name: string,
+	versionId: string,
+	platformId: string,
+	fileName: string,
+	mode: DecompMode
+): FunctionRow[] {
+	const binary = getBinaryByRef(versionId, platformId, fileName);
+	if (!binary) return [];
+	const decomp = listDecompilations(binary.id).find((d) => d.mode === mode);
+	if (!decomp) return [];
+
+	return getDb()
+		.prepare(
+			`SELECT
+				id,
+				decompilation_id AS decompilationId,
+				name,
+				demangled_name AS demangledName,
+				address,
+				size,
+				type_signature AS typeSignature
+			FROM functions
+			WHERE decompilation_id = ? AND (name = ? OR demangled_name = ?)
+			ORDER BY address
+			LIMIT 50`
+		)
+		.all(decomp.id, name, name) as unknown as FunctionRow[];
+}

@@ -141,7 +141,7 @@ Every state is a URL. E.g.:
 - `/2.206/android64` — binaries for that version/platform
 - `/2.206/android64/libcocos2dcpp.so/raw` — function list
 - `/2.206/android64/libcocos2dcpp.so/raw/PlayerObject::update` — a function
-- `/2.206/android64/libcocos2dcpp.so/raw/diff/2.207/android64/libcocos2dcpp.so/raw/PlayerObject::update` — a diff
+- `/diff/123/456` — a diff between two functions (reached from a function view's "Compare", which matches by name)
 
 Selection state (selected line/address, enabled views) is encoded in query/hash params so a
 link can be shared and re-opens the exact highlight.
