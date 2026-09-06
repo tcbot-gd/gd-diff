@@ -7,6 +7,16 @@ export type DecompMode = (typeof DECOMP_MODES)[number]['id'];
 
 export type DecompStatus = 'pending' | 'running' | 'done' | 'failed';
 
+export type DecompilationPhase = 'analyzing' | 'decompiling' | 'done' | 'failed';
+
+export interface DecompilationProgress {
+	phase: DecompilationPhase;
+	functionsDone: number;
+	functionsTotal: number | null;
+	currentFunction: string | null;
+	updatedAt: string;
+}
+
 export const DECOMP_MODE_BY_ID = new Map<DecompMode, (typeof DECOMP_MODES)[number]>(
 	DECOMP_MODES.map((m) => [m.id, m])
 );

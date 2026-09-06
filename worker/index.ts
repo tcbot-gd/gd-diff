@@ -44,7 +44,7 @@ function claimPending(): PendingDecomp | null {
 	if (!row) return null;
 
 	db.prepare(
-		"UPDATE decompilations SET status = 'running', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?"
+		"UPDATE decompilations SET status = 'running', error = NULL, progress = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?"
 	).run(row.id);
 	return row;
 }
@@ -61,6 +61,7 @@ function runIda(decomp: PendingDecomp): Promise<void> {
 	const outDir = path.join(config.exportsDir, String(decomp.id));
 	mkdirSync(outDir, { recursive: true });
 	const logPath = path.join(outDir, 'ida.log');
+	const progressPath = path.join(outDir, 'progress.json');
 	const idaUserDir = ensureIdaUserDir();
 
 	return new Promise((resolve, reject) => {
@@ -75,10 +76,25 @@ function runIda(decomp: PendingDecomp): Promise<void> {
 			stdio: 'ignore'
 		});
 
+		// Mirror IDA's progress.json into the DB so the UI can show live progress.
+		const mirrorProgress = () => {
+			try {
+				if (existsSync(progressPath)) {
+					const raw = readFileSync(progressPath, 'utf-8');
+					getDb().prepare('UPDATE decompilations SET progress = ? WHERE id = ?').run(raw, decomp.id);
+				}
+			} catch {
+				// ignore transient read errors
+			}
+		};
+		mirrorProgress();
+		const poll = setInterval(mirrorProgress, 2000);
+
 		let settled = false;
 		const done = (error?: Error) => {
 			if (settled) return;
 			settled = true;
+			clearInterval(poll);
 			if (error) reject(error);
 			else resolve();
 		};
@@ -99,6 +115,29 @@ function readImageBase(metaPath: string): number | null {
 	}
 }
 
+function readErrorDetail(outDir: string, fallback: string): string {
+	const parts: string[] = [];
+	try {
+		const errPath = path.join(outDir, 'error.json');
+		if (existsSync(errPath)) {
+			const parsed = JSON.parse(readFileSync(errPath, 'utf-8')) as { error?: string };
+			if (parsed.error) parts.push(parsed.error.trim());
+		}
+	} catch {
+		// ignore
+	}
+	try {
+		const logPath = path.join(outDir, 'ida.log');
+		if (existsSync(logPath)) {
+			const tail = readFileSync(logPath, 'utf-8').trim().split(/\r?\n/).slice(-40).join('\n');
+			if (tail) parts.push(`--- ida.log (last 40 lines) ---\n${tail}`);
+		}
+	} catch {
+		// ignore
+	}
+	return parts.length > 0 ? parts.join('\n\n') : fallback;
+}
+
 async function processNext(): Promise<boolean> {
 	const decomp = claimPending();
 	if (!decomp) return false;
@@ -115,11 +154,13 @@ async function processNext(): Promise<boolean> {
 		console.log(`[worker] done #${decomp.id}: ${count} functions`);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
+		const outDir = path.join(config.exportsDir, String(decomp.id));
+		const detail = readErrorDetail(outDir, message);
 		getDb()
 			.prepare(
-				"UPDATE decompilations SET status = 'failed', error = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?"
+				"UPDATE decompilations SET status = 'failed', error = ?, progress = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?"
 			)
-			.run(message, decomp.id);
+			.run(detail, JSON.stringify({ phase: 'failed' }), decomp.id);
 		console.error(`[worker] failed #${decomp.id}:`, message);
 	}
 	return true;

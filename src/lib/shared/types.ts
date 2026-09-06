@@ -1,5 +1,5 @@
 import type { Arch, PlatformId, BinaryRole } from './platforms';
-import type { DecompMode, DecompStatus } from './modes';
+import type { DecompMode, DecompStatus, DecompilationProgress } from './modes';
 
 export interface PlatformRow {
 	id: PlatformId;
@@ -37,6 +37,7 @@ export interface DecompilationRow {
 	imageBase: number | null;
 	status: DecompStatus;
 	error: string | null;
+	progress: DecompilationProgress | null;
 	createdAt: string;
 	updatedAt: string;
 }

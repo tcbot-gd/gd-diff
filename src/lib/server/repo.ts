@@ -11,7 +11,47 @@ import type {
 	VersionPlatformMatrix
 } from '../shared/types';
 import type { BinaryRole } from '../shared/platforms';
-import type { DecompMode } from '../shared/modes';
+import type { DecompMode, DecompilationProgress } from '../shared/modes';
+
+interface DecompilationRowRaw {
+	id: number;
+	binaryId: number;
+	mode: DecompMode;
+	bindingsCommit: string | null;
+	imageBase: number | null;
+	status: DecompilationRow['status'];
+	error: string | null;
+	progress: string | null;
+	createdAt: string;
+	updatedAt: string;
+}
+
+function parseProgress(raw: string | null | undefined): DecompilationProgress | null {
+	if (!raw) return null;
+	try {
+		const p = JSON.parse(raw) as {
+			phase?: DecompilationProgress['phase'];
+			functions_done?: number;
+			functions_total?: number | null;
+			current_function?: string | null;
+			updated_at?: string;
+		};
+		return {
+			phase: p.phase ?? 'analyzing',
+			functionsDone: p.functions_done ?? 0,
+			functionsTotal: p.functions_total ?? null,
+			currentFunction: p.current_function ?? null,
+			updatedAt: p.updated_at ?? ''
+		};
+	} catch {
+		return null;
+	}
+}
+
+function mapDecompilation(raw: DecompilationRowRaw): DecompilationRow {
+	const { progress, ...rest } = raw;
+	return { ...rest, progress: parseProgress(progress) };
+}
 
 export function listPlatforms(): PlatformRow[] {
 	return getDb().prepare('SELECT id, label, arch, ord FROM platforms ORDER BY ord').all() as unknown as PlatformRow[];
@@ -57,7 +97,7 @@ export function listBinaries(versionId: string, platformId: string): BinaryWithS
 }
 
 export function listDecompilations(binaryId: number): DecompilationRow[] {
-	return getDb()
+	const rows = getDb()
 		.prepare(
 			`SELECT
 				id,
@@ -67,34 +107,36 @@ export function listDecompilations(binaryId: number): DecompilationRow[] {
 				image_base AS imageBase,
 				status,
 				error,
+				progress,
 				created_at AS createdAt,
 				updated_at AS updatedAt
 			FROM decompilations
 			WHERE binary_id = ?
 			ORDER BY mode`
 		)
-		.all(binaryId) as unknown as DecompilationRow[];
+		.all(binaryId) as unknown as DecompilationRowRaw[];
+	return rows.map(mapDecompilation);
 }
 
 export function getDecompilation(id: number): DecompilationRow | null {
-	return (
-		(getDb()
-			.prepare(
-				`SELECT
-					id,
-					binary_id AS binaryId,
-					mode,
-					bindings_commit AS bindingsCommit,
-					image_base AS imageBase,
-					status,
-					error,
-					created_at AS createdAt,
-					updated_at AS updatedAt
-				FROM decompilations
-				WHERE id = ?`
-			)
-			.get(id) as unknown as DecompilationRow | undefined) ?? null
-	);
+	const raw = getDb()
+		.prepare(
+			`SELECT
+				id,
+				binary_id AS binaryId,
+				mode,
+				bindings_commit AS bindingsCommit,
+				image_base AS imageBase,
+				status,
+				error,
+				progress,
+				created_at AS createdAt,
+				updated_at AS updatedAt
+			FROM decompilations
+			WHERE id = ?`
+		)
+		.get(id) as unknown as DecompilationRowRaw | undefined;
+	return raw ? mapDecompilation(raw) : null;
 }
 
 export interface FunctionListOptions {

@@ -126,6 +126,9 @@ function migrate(database: DatabaseSync): void {
 	if (!columns.some((c) => c.name === 'image_base')) {
 		database.exec('ALTER TABLE decompilations ADD COLUMN image_base INTEGER');
 	}
+	if (!columns.some((c) => c.name === 'progress')) {
+		database.exec('ALTER TABLE decompilations ADD COLUMN progress TEXT');
+	}
 }
 
 function seed(database: DatabaseSync): void {

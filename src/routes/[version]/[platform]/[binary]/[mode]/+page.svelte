@@ -1,9 +1,54 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
-	import { goto } from '$app/navigation';
+	import { untrack, onMount, onDestroy } from 'svelte';
+	import { goto, invalidateAll } from '$app/navigation';
 	import type { PageData } from './$types';
+	import type { DecompilationProgress } from '$lib/shared/modes';
 
 	let { data }: { data: PageData } = $props();
+
+	let liveStatus = $state<string | null>(untrack(() => data.decompilation?.status ?? null));
+	let liveError = $state<string | null>(untrack(() => data.decompilation?.error ?? null));
+	let liveProgress = $state<DecompilationProgress | null>(untrack(() => data.decompilation?.progress ?? null));
+	let livePct = $derived(
+		liveProgress?.functionsTotal
+			? Math.round((liveProgress.functionsDone / liveProgress.functionsTotal) * 100)
+			: null
+	);
+	let pollTimer: ReturnType<typeof setInterval> | undefined;
+
+	onMount(() => {
+		const decomp = data.decompilation;
+		if (!decomp || (decomp.status !== 'pending' && decomp.status !== 'running')) return;
+		pollTimer = setInterval(async () => {
+			try {
+				const res = await fetch(`/api/decompilations?binary=${decomp.binaryId}`);
+				if (!res.ok) return;
+				const body = (await res.json()) as {
+					decompilations: {
+						mode: string;
+						status: string;
+						error: string | null;
+						progress: DecompilationProgress | null;
+					}[];
+				};
+				const d = body.decompilations.find((x) => x.mode === decomp.mode);
+				if (!d) return;
+				liveStatus = d.status;
+				liveError = d.error;
+				liveProgress = d.progress;
+				if (d.status === 'done' || d.status === 'failed') {
+					if (pollTimer) clearInterval(pollTimer);
+					if (d.status === 'done') await invalidateAll();
+				}
+			} catch {
+				// ignore transient errors; the next tick retries
+			}
+		}, 2000);
+	});
+
+	onDestroy(() => {
+		if (pollTimer) clearInterval(pollTimer);
+	});
 
 	let goAddr = $state('');
 	let goRva = $state(false);
@@ -60,7 +105,7 @@
 		</h1>
 		{#if data.decompilation}
 			<p class="text-sm text-muted">
-				{data.decompilation.mode} · {data.decompilation.status}
+				{data.decompilation.mode} · {liveStatus}
 				{#if data.decompilation.bindingsCommit}
 					<span class="ml-2 font-mono text-xs">{data.decompilation.bindingsCommit}</span>
 				{/if}
@@ -102,8 +147,52 @@
 
 	{#if !data.decompilation}
 		<p class="text-sm text-muted">This binary has not been uploaded / decompiled yet.</p>
-	{:else if data.decompilation.status !== 'done'}
-		<p class="text-sm text-warn">Decompilation in progress (status: {data.decompilation.status}).</p>
+	{:else if liveStatus === 'failed'}
+		<div class="space-y-2 rounded-sm border border-warn/40 bg-surface p-4">
+			<h2 class="text-sm font-semibold text-warn">Decompilation failed</h2>
+			{#if liveError}
+				<pre
+					class="max-h-72 overflow-auto whitespace-pre-wrap rounded-sm bg-surface-2 p-3 font-mono text-[11px] leading-relaxed text-fg">{liveError}</pre
+				>
+			{/if}
+		</div>
+	{:else if liveStatus !== 'done'}
+		<div class="space-y-3 rounded-sm border border-border bg-surface p-4">
+			<div class="flex items-center justify-between text-sm">
+				<span class="text-warn">Decompiling…</span>
+				<span class="font-mono text-xs text-muted">{liveStatus}</span>
+			</div>
+			{#if liveProgress}
+				<div class="space-y-1.5">
+					<div class="flex items-baseline justify-between text-xs text-muted">
+						<span class="capitalize">{liveProgress.phase}</span>
+						{#if livePct !== null}
+							<span class="font-mono"
+								>{liveProgress.functionsDone.toLocaleString()} /
+								{liveProgress.functionsTotal?.toLocaleString()} functions · {livePct}%</span
+							>
+						{:else}
+							<span class="font-mono">{liveProgress.functionsDone.toLocaleString()} functions</span>
+						{/if}
+					</div>
+					<div class="h-1.5 overflow-hidden rounded-full bg-surface-2">
+						{#if livePct !== null}
+							<div
+								class="h-full rounded-full bg-accent transition-all duration-500"
+								style="width: {livePct}%"
+							></div>
+						{:else}
+							<div class="h-full w-1/4 animate-pulse rounded-full bg-accent/60"></div>
+						{/if}
+					</div>
+					{#if liveProgress.currentFunction}
+						<div class="truncate font-mono text-[11px] text-muted">now: {liveProgress.currentFunction}</div>
+					{/if}
+				</div>
+			{:else}
+				<p class="text-xs text-muted">Waiting for IDA to start…</p>
+			{/if}
+		</div>
 	{:else if data.q}
 		<div class="space-y-6">
 			{#if data.functions.length > 0}

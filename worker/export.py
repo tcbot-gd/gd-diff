@@ -14,6 +14,8 @@ Output:
 
 import json
 import os
+import time
+import traceback
 
 import idaapi
 import idautils
@@ -238,7 +240,43 @@ def apply_broma_bindings():
     print("[export] broma mode requested; bindings application is a stub")
 
 
+def write_progress(phase, done, total, current=None):
+    payload = {
+        "phase": phase,
+        "functions_done": done,
+        "functions_total": total,
+        "current_function": current,
+        "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
+    try:
+        with open(os.path.join(OUT, "progress.json"), "w", encoding="utf-8") as fh:
+            json.dump(payload, fh)
+    except Exception:
+        pass
+
+
+def write_error(message):
+    try:
+        with open(os.path.join(OUT, "error.json"), "w", encoding="utf-8") as fh:
+            json.dump({"error": message}, fh, indent=2)
+    except Exception:
+        pass
+
+
+def qexit(code):
+    try:
+        import ida_pro
+
+        ida_pro.qexit(code)
+    except Exception:
+        idaapi.qexit(code)
+
+
 def main():
+    if not os.path.isdir(OUT):
+        os.makedirs(OUT, exist_ok=True)
+    write_progress("analyzing", 0, None)
+
     configure_decompiler()
     apply_broma_bindings()
     try:
@@ -250,13 +288,15 @@ def main():
 
     ida_auto.auto_wait()
 
-    if not os.path.isdir(OUT):
-        os.makedirs(OUT, exist_ok=True)
+    funcs = list(idautils.Functions())
+    total = len(funcs)
+    write_progress("decompiling", 0, total)
+    print("[export] %d functions to process" % total)
 
     ndjson_path = os.path.join(OUT, "functions.ndjson")
     count = 0
     with open(ndjson_path, "w", encoding="utf-8") as fh:
-        for ea in idautils.Functions():
+        for ea in funcs:
             func = ida_funcs.get_func(ea)
             if func is None:
                 continue
@@ -280,8 +320,9 @@ def main():
             }
             fh.write(json.dumps(record, ensure_ascii=False) + "\n")
             count += 1
-            if count % 1000 == 0:
-                print("[export] %d functions" % count)
+            if count % 100 == 0:
+                write_progress("decompiling", count, total, name)
+                print("[export] %d / %d functions" % (count, total))
 
     image_base = None
     try:
@@ -301,14 +342,17 @@ def main():
     with open(os.path.join(OUT, "meta.json"), "w", encoding="utf-8") as fh:
         json.dump(meta, fh, indent=2)
 
+    write_progress("done", count, total)
     print("[export] wrote %d functions to %s" % (count, ndjson_path))
-    try:
-        import ida_pro
-
-        ida_pro.qexit(0)
-    except Exception:
-        idaapi.qexit(0)
+    qexit(0)
 
 
-main()
+try:
+    main()
+except Exception:
+    tb = traceback.format_exc()
+    write_progress("failed", 0, None)
+    write_error(tb)
+    print("[export] FAILED:\n%s" % tb)
+    qexit(1)
 

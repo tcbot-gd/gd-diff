@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { PageData } from './$types';
 	import { PLATFORM_BY_ID } from '$lib/shared/platforms';
-	import { DECOMP_MODES } from '$lib/shared/modes';
+	import { DECOMP_MODES, type DecompilationProgress } from '$lib/shared/modes';
 
 	let { data }: { data: PageData } = $props();
 
@@ -15,7 +15,7 @@
 	fileName: string,
 	role: string,
 	label: string,
-	decompilations: { mode: string; status: string }[] | undefined
+	decompilations: { mode: string; status: string; progress: DecompilationProgress | null }[] | undefined
 )}
 	<div class="rounded-sm border border-border bg-surface p-4">
 		<div class="flex items-start justify-between gap-3">
@@ -28,17 +28,27 @@
 		<div class="mt-3 flex flex-wrap gap-1.5">
 			{#each DECOMP_MODES as mode}
 				{@const d = decompilations?.find((x) => x.mode === mode.id)}
-				{#if d?.status === 'done'}
+				{#if d}
 					<a
 						href="/{data.version.id}/{data.platform.id}/{encodeURIComponent(fileName)}/{mode.id}"
-						class="rounded-sm border border-border bg-surface-2 px-2.5 py-1 font-mono text-[11px] text-ok hover:border-accent"
+						class="rounded-sm border bg-surface-2 px-2.5 py-1 font-mono text-[11px] hover:border-accent {d.status ===
+						'failed'
+							? 'border-warn/40 text-warn'
+							: 'border-border text-fg'}"
 					>
-						{mode.id} ✓
+						{mode.id}
+						{#if d.status === 'done'}
+							✓
+						{:else if d.status === 'running' && d.progress?.functionsTotal}
+							{d.progress.functionsDone}/{d.progress.functionsTotal}
+						{:else if d.status === 'running'}
+							· running
+						{:else if d.status === 'failed'}
+							· failed
+						{:else}
+							· {d.status}
+						{/if}
 					</a>
-				{:else if d}
-					<span class="rounded-sm border border-border px-2.5 py-1 font-mono text-[11px] text-muted">
-						{mode.id} · {d.status}
-					</span>
 				{:else}
 					<span
 						class="rounded-sm border border-dashed border-border px-2.5 py-1 font-mono text-[11px] text-muted/50"
