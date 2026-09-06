@@ -325,3 +325,55 @@ export function findFunctionByAddress(decompilationId: number, address: number):
 			.get(decompilationId, address, address) as unknown as FunctionRow | undefined) ?? null
 	);
 }
+
+export interface MemberUseRow {
+	functionId: number;
+	functionName: string;
+	ownerType: string;
+	memberName: string;
+	memberKind: string;
+}
+
+export function findMemberUses(decompilationId: number, query: string): MemberUseRow[] {
+	const pattern = `%${query}%`;
+	return getDb()
+		.prepare(
+			`SELECT
+				mu.function_id AS functionId,
+				f.name AS functionName,
+				mu.owner_type AS ownerType,
+				mu.member_name AS memberName,
+				mu.member_kind AS memberKind
+			FROM member_uses mu
+			JOIN functions f ON f.id = mu.function_id
+			WHERE mu.decompilation_id = ? AND (mu.member_name LIKE ? OR mu.owner_type LIKE ?)
+			ORDER BY mu.member_name, mu.owner_type, f.name
+			LIMIT 200`
+		)
+		.all(decompilationId, pattern, pattern) as unknown as MemberUseRow[];
+}
+
+export interface CallerRow {
+	callerId: number;
+	callerName: string;
+	calleeName: string;
+	calleeAddress: number | null;
+}
+
+export function findCallers(decompilationId: number, query: string): CallerRow[] {
+	const pattern = `%${query}%`;
+	return getDb()
+		.prepare(
+			`SELECT
+				fc.caller_id AS callerId,
+				f.name AS callerName,
+				fc.callee_name AS calleeName,
+				fc.callee_address AS calleeAddress
+			FROM function_calls fc
+			JOIN functions f ON f.id = fc.caller_id
+			WHERE fc.decompilation_id = ? AND fc.callee_name LIKE ?
+			ORDER BY fc.callee_name, f.name
+			LIMIT 200`
+		)
+		.all(decompilationId, pattern) as unknown as CallerRow[];
+}

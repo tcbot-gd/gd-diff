@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import type { PageData } from './$types';
 
@@ -27,6 +28,22 @@
 			`/${data.version.id}/${data.platform.id}/${encodeURIComponent(data.binary.fileName)}/${data.decompilation.mode}/fn/${body.function.id}?addr=0x${body.address.toString(16)}`
 		);
 	}
+
+	let search = $state(untrack(() => data.q ?? ''));
+
+	const base = $derived(
+		`/${data.version.id}/${data.platform.id}/${encodeURIComponent(data.binary.fileName)}/${data.decompilation?.mode ?? ''}`
+	);
+
+	function fnUrl(id: number) {
+		return `${base}/fn/${id}`;
+	}
+
+	async function onSearch(event: SubmitEvent) {
+		event.preventDefault();
+		const q = search.trim();
+		await goto(q ? `${base}?q=${encodeURIComponent(q)}` : base);
+	}
 </script>
 
 <div class="space-y-6">
@@ -50,6 +67,19 @@
 			</p>
 		{/if}
 		{#if data.decompilation?.status === 'done'}
+			<form class="flex flex-wrap items-center gap-2" onsubmit={onSearch}>
+				<input
+					bind:value={search}
+					placeholder="Search functions, members, callers"
+					class="w-72 rounded-sm border border-border bg-surface-2 px-2 py-1 font-mono text-sm text-fg"
+				/>
+				<button
+					type="submit"
+					class="rounded-sm border border-border bg-surface-2 px-3 py-1 text-sm text-fg hover:border-accent"
+				>
+					Search
+				</button>
+			</form>
 			<form class="flex flex-wrap items-center gap-2" onsubmit={onGo}>
 				<input
 					bind:value={goAddr}
@@ -74,6 +104,65 @@
 		<p class="text-sm text-muted">This binary has not been uploaded / decompiled yet.</p>
 	{:else if data.decompilation.status !== 'done'}
 		<p class="text-sm text-warn">Decompilation in progress (status: {data.decompilation.status}).</p>
+	{:else if data.q}
+		<div class="space-y-6">
+			{#if data.functions.length > 0}
+				<section>
+					<h2 class="text-sm font-medium uppercase tracking-wider text-muted">
+						Functions ({data.functions.length})
+					</h2>
+					<ul class="mt-2 divide-y divide-border overflow-hidden rounded-sm border border-border bg-surface">
+						{#each data.functions as fn}
+							<li>
+								<a href={fnUrl(fn.id)} class="flex items-baseline gap-3 px-3 py-2 text-sm hover:bg-surface-2">
+									<span class="w-24 shrink-0 text-right font-mono text-[11px] text-muted">
+										0x{fn.address.toString(16)}
+									</span>
+									<span class="truncate font-mono text-fg">{fn.name}</span>
+								</a>
+							</li>
+						{/each}
+					</ul>
+				</section>
+			{/if}
+			{#if data.memberUses.length > 0}
+				<section>
+					<h2 class="text-sm font-medium uppercase tracking-wider text-muted">
+						Member uses ({data.memberUses.length})
+					</h2>
+					<ul class="mt-2 divide-y divide-border overflow-hidden rounded-sm border border-border bg-surface">
+						{#each data.memberUses as use}
+							<li>
+								<a href={fnUrl(use.functionId)} class="flex items-baseline gap-3 px-3 py-2 text-sm hover:bg-surface-2">
+									<span class="font-mono text-xs text-muted">{use.ownerType}::{use.memberName}</span>
+									<span class="truncate font-mono text-fg">{use.functionName}</span>
+								</a>
+							</li>
+						{/each}
+					</ul>
+				</section>
+			{/if}
+			{#if data.callers.length > 0}
+				<section>
+					<h2 class="text-sm font-medium uppercase tracking-wider text-muted">
+						Callers ({data.callers.length})
+					</h2>
+					<ul class="mt-2 divide-y divide-border overflow-hidden rounded-sm border border-border bg-surface">
+						{#each data.callers as caller}
+							<li>
+								<a href={fnUrl(caller.callerId)} class="flex items-baseline gap-3 px-3 py-2 text-sm hover:bg-surface-2">
+									<span class="font-mono text-xs text-muted">{caller.calleeName}</span>
+									<span class="truncate font-mono text-fg">{caller.callerName}</span>
+								</a>
+							</li>
+						{/each}
+					</ul>
+				</section>
+			{/if}
+			{#if data.functions.length === 0 && data.memberUses.length === 0 && data.callers.length === 0}
+				<p class="text-sm text-muted">No results for “{data.q}”.</p>
+			{/if}
+		</div>
 	{:else if data.functions.length === 0}
 		<p class="text-sm text-muted">Decompiled, but no functions were indexed.</p>
 	{:else}

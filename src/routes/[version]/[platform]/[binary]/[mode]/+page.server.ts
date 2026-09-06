@@ -1,6 +1,8 @@
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import {
+	findCallers,
+	findMemberUses,
 	getBinaryByRef,
 	getPlatform,
 	getVersion,
@@ -9,7 +11,7 @@ import {
 } from '$lib/server/repo';
 import { isDecompMode } from '$lib/shared/modes';
 
-export const load: PageServerLoad = ({ params }) => {
+export const load: PageServerLoad = ({ params, url }) => {
 	const version = getVersion(params.version);
 	if (!version) throw error(404, 'Unknown version');
 
@@ -22,7 +24,16 @@ export const load: PageServerLoad = ({ params }) => {
 	if (!binary) throw error(404, 'Binary not found');
 
 	const decompilation = listDecompilations(binary.id).find((d) => d.mode === params.mode) ?? null;
-	const functions = decompilation ? listFunctions(decompilation.id, { limit: 500, offset: 0 }) : [];
 
-	return { version, platform, binary, decompilation, functions };
+	const q = (url.searchParams.get('q') ?? '').trim();
+
+	const functions = decompilation
+		? q
+			? listFunctions(decompilation.id, { query: q, limit: 200, offset: 0 })
+			: listFunctions(decompilation.id, { limit: 500, offset: 0 })
+		: [];
+	const memberUses = q && decompilation ? findMemberUses(decompilation.id, q) : [];
+	const callers = q && decompilation ? findCallers(decompilation.id, q) : [];
+
+	return { version, platform, binary, decompilation, functions, memberUses, callers, q };
 };

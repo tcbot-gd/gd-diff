@@ -21,8 +21,14 @@ export const load: PageServerLoad = ({ params, url }) => {
 	const addrParam = url.searchParams.get('addr');
 	const addr = addrParam ? parseInt(addrParam, 16) : null;
 
+	const title = fn.demangledName ?? fn.name;
+
 	return {
 		function: fn,
-		initialAddr: addr != null && !Number.isNaN(addr) ? addr : null
+		initialAddr: addr != null && !Number.isNaN(addr) ? addr : null,
+		seo: {
+			title,
+			description: `${title} — ${fn.versionId}/${fn.platformId}/${fn.fileName} (${fn.mode})`
+		}
 	};
 };

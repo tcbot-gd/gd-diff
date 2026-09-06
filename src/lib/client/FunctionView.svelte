@@ -273,7 +273,14 @@
 					</h3>
 					<ul class="mt-2 space-y-1">
 						{#each content.calls as call}
-							<li class="font-mono text-xs text-fg">{call.name}</li>
+							<li>
+								<a
+									href="/{fn.versionId}/{fn.platformId}/{encodeURIComponent(fn.fileName)}/{fn.mode}?q={encodeURIComponent(call.name)}"
+									class="font-mono text-xs text-accent hover:underline"
+								>
+									{call.name}
+								</a>
+							</li>
 						{/each}
 					</ul>
 				</div>
@@ -285,9 +292,14 @@
 					</h3>
 					<ul class="mt-2 space-y-1">
 						{#each content.members as member}
-							<li class="font-mono text-xs text-fg">
-								<span class="text-muted">{member.kind === 'this' ? 'this' : member.owner}::</span
-								>{member.name}
+							<li>
+								<a
+									href="/{fn.versionId}/{fn.platformId}/{encodeURIComponent(fn.fileName)}/{fn.mode}?q={encodeURIComponent(member.name)}"
+									class="font-mono text-xs text-accent hover:underline"
+								>
+									<span class="text-muted">{member.kind === 'this' ? 'this' : member.owner}::</span
+									>{member.name}
+								</a>
 							</li>
 						{/each}
 					</ul>
