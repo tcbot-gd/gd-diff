@@ -171,7 +171,7 @@
 								>{liveProgress.functionsDone.toLocaleString()} /
 								{liveProgress.functionsTotal?.toLocaleString()} functions · {livePct}%</span
 							>
-						{:else}
+						{:else if liveProgress.functionsDone > 0}
 							<span class="font-mono">{liveProgress.functionsDone.toLocaleString()} functions</span>
 						{/if}
 					</div>
@@ -188,9 +188,21 @@
 					{#if liveProgress.currentFunction}
 						<div class="truncate font-mono text-[11px] text-muted">now: {liveProgress.currentFunction}</div>
 					{/if}
+					{#if liveProgress.phase === 'analyzing'}
+						<p class="text-[11px] text-muted">
+							IDA is loading and auto-analyzing the binary — this can take a while on a large file.
+						</p>
+					{/if}
 				</div>
+				{#if liveProgress.logTail.length > 0}
+					<pre
+						class="max-h-48 overflow-auto whitespace-pre-wrap rounded-sm bg-surface-2 p-2 font-mono text-[11px] leading-relaxed text-muted">{liveProgress.logTail.join('\n')}</pre
+					>
+				{/if}
 			{:else}
-				<p class="text-xs text-muted">Waiting for IDA to start…</p>
+				<p class="text-xs text-muted">
+					Queued — waiting for the worker to pick this up. Make sure the worker is running.
+				</p>
 			{/if}
 		</div>
 	{:else if data.q}

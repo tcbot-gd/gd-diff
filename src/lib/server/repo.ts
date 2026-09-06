@@ -34,13 +34,18 @@ function parseProgress(raw: string | null | undefined): DecompilationProgress | 
 			functions_done?: number;
 			functions_total?: number | null;
 			current_function?: string | null;
+			log_tail?: unknown;
 			updated_at?: string;
 		};
+		const logTail = Array.isArray(p.log_tail)
+			? p.log_tail.filter((x): x is string => typeof x === 'string')
+			: [];
 		return {
 			phase: p.phase ?? 'analyzing',
 			functionsDone: p.functions_done ?? 0,
 			functionsTotal: p.functions_total ?? null,
 			currentFunction: p.current_function ?? null,
+			logTail,
 			updatedAt: p.updated_at ?? ''
 		};
 	} catch {

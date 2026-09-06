@@ -44,8 +44,18 @@ function claimPending(): PendingDecomp | null {
 	if (!row) return null;
 
 	db.prepare(
-		"UPDATE decompilations SET status = 'running', error = NULL, progress = NULL, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?"
-	).run(row.id);
+		"UPDATE decompilations SET status = 'running', error = NULL, progress = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?"
+	).run(
+		JSON.stringify({
+			phase: 'analyzing',
+			functions_done: 0,
+			functions_total: null,
+			current_function: null,
+			log_tail: [],
+			updated_at: new Date().toISOString()
+		}),
+		row.id
+	);
 	return row;
 }
 
@@ -76,13 +86,26 @@ function runIda(decomp: PendingDecomp): Promise<void> {
 			stdio: 'ignore'
 		});
 
-		// Mirror IDA's progress.json into the DB so the UI can show live progress.
+		// Mirror IDA's progress.json + log tail into the DB so the UI shows live progress.
 		const mirrorProgress = () => {
 			try {
+				const logTail = readLogTail(logPath, 20);
+				let parsed: Record<string, unknown> = {
+					phase: 'analyzing',
+					functions_done: 0,
+					functions_total: null,
+					current_function: null,
+					updated_at: new Date().toISOString()
+				};
 				if (existsSync(progressPath)) {
-					const raw = readFileSync(progressPath, 'utf-8');
-					getDb().prepare('UPDATE decompilations SET progress = ? WHERE id = ?').run(raw, decomp.id);
+					try {
+						parsed = JSON.parse(readFileSync(progressPath, 'utf-8'));
+					} catch {
+						// malformed/partial progress.json; keep the fallback
+					}
 				}
+				parsed.log_tail = logTail;
+				getDb().prepare('UPDATE decompilations SET progress = ? WHERE id = ?').run(JSON.stringify(parsed), decomp.id);
 			} catch {
 				// ignore transient read errors
 			}
@@ -112,6 +135,19 @@ function readImageBase(metaPath: string): number | null {
 		return typeof meta.image_base === 'number' ? meta.image_base : null;
 	} catch {
 		return null;
+	}
+}
+
+function readLogTail(logPath: string, lines = 20): string[] {
+	try {
+		if (!existsSync(logPath)) return [];
+		return readFileSync(logPath, 'utf-8')
+			.split(/\r?\n/)
+			.map((line) => line.trim())
+			.filter(Boolean)
+			.slice(-lines);
+	} catch {
+		return [];
 	}
 }
 

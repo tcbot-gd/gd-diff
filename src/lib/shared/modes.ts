@@ -14,6 +14,7 @@ export interface DecompilationProgress {
 	functionsDone: number;
 	functionsTotal: number | null;
 	currentFunction: string | null;
+	logTail: string[];
 	updatedAt: string;
 }
 
