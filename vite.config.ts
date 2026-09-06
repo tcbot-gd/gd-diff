@@ -15,8 +15,8 @@ export default defineConfig({
 			csrf: {
 				// The upload API uses Basic auth (no cookies), so CSRF is not a
 				// meaningful vector, and the Origin check breaks behind reverse
-				// proxies (https vs http origin mismatch). Disable it.
-				checkOrigin: false
+				// proxies (https vs http origin mismatch). Trust all origins.
+				trustedOrigins: ['*']
 			}
 		})
 	]

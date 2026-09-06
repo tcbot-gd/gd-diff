@@ -44,15 +44,19 @@ export const POST: RequestHandler = async ({ request }) => {
 		mkdirSync(dir, { recursive: true });
 		writeFileSync(path.join(dir, fileName), buffer);
 
-		const result = db
-			.prepare(
-				`INSERT INTO binaries (version_id, platform_id, file_name, role, sha256)
-				 VALUES (?, ?, ?, ?, ?)
-				 ON CONFLICT(version_id, platform_id, file_name)
-				 DO UPDATE SET sha256 = excluded.sha256, role = excluded.role`
-			)
-			.run(versionId, platformId, fileName, role, sha256);
-		const binaryId = Number(result.lastInsertRowid);
+		db.prepare(
+			`INSERT INTO binaries (version_id, platform_id, file_name, role, sha256)
+			 VALUES (?, ?, ?, ?, ?)
+			 ON CONFLICT(version_id, platform_id, file_name)
+			 DO UPDATE SET sha256 = excluded.sha256, role = excluded.role`
+		).run(versionId, platformId, fileName, role, sha256);
+
+		// `lastInsertRowid` is unreliable after `ON CONFLICT DO UPDATE` (an update
+		// doesn't change it), so look up the row's actual id.
+		const row = db
+			.prepare('SELECT id FROM binaries WHERE version_id = ? AND platform_id = ? AND file_name = ?')
+			.get(versionId, platformId, fileName) as unknown as { id: number };
+		const binaryId = Number(row.id);
 
 		const insertDecomp = db.prepare('INSERT OR IGNORE INTO decompilations (binary_id, mode) VALUES (?, ?)');
 		for (const mode of DECOMP_MODES) {

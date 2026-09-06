@@ -1,3 +1,19 @@
+import { existsSync } from 'node:fs';
+import path from 'node:path';
+
+// Load `.env` into `process.env`. The SvelteKit server (dev + build) runs under
+// Node, which does NOT auto-load `.env` — only the standalone Bun worker does.
+// We can't use SvelteKit's `$env/dynamic/private` here because this module is
+// also imported by the worker (`worker/index.ts`), which runs outside SvelteKit.
+const envFile = path.join(process.cwd(), '.env');
+if (existsSync(envFile) && typeof process.loadEnvFile === 'function') {
+	try {
+		process.loadEnvFile(envFile);
+	} catch {
+		// Ignore malformed `.env`; fall back to real environment variables.
+	}
+}
+
 function readString(key: string, fallback: string): string {
 	const value = process.env[key];
 	return value === undefined || value === '' ? fallback : value;
