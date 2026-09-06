@@ -71,6 +71,7 @@ export interface HexRow {
 
 export interface CallRef {
 	addr: number;
+	target: number;
 	name: string;
 }
 

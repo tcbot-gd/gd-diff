@@ -27,8 +27,7 @@ services:
     restart: unless-stopped
     environment:
       DATA_DIR: /data
-      IDA64_PATH: /opt/ida/idat64
-      IDA32_PATH: /opt/ida/idat
+      IDA_PATH: /opt/ida/idat
       BROMA_PLUGIN_DIR: /opt/ida/plugins
       BINDINGS_REPO_URL: ${BINDINGS_REPO_URL:-https://github.com/geode-sdk/bindings}
       BINDINGS_COMMIT: ${BINDINGS_COMMIT:-}

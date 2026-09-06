@@ -1,20 +1,130 @@
+import { spawn } from 'node:child_process';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import { getDb } from '../src/lib/server/db';
+import { env } from '../src/lib/server/env';
+import { config } from '../src/lib/server/config';
+import { ingestDecompilation } from '../src/lib/server/ingest';
 
-function tick(): void {
-	const db = getDb();
-	const pending = db
-		.prepare("SELECT id, mode FROM decompilations WHERE status = 'pending' ORDER BY id LIMIT 10")
-		.all() as unknown as { id: number; mode: string }[];
+const SCRIPT_PATH = path.resolve(import.meta.dir, 'export.py');
 
-	if (pending.length === 0) {
-		console.log('[worker] idle — no pending decompilations');
-		return;
-	}
+const HEXRAYS_OVERRIDE = `// gd-diff override: raise limits so large Geometry Dash functions still decompile
+MAX_FUNCSIZE = 1000000000
+MAX_FUNC_ARGS = 10000
+`;
 
-	console.log('[worker] pending decompilations:', pending);
-	// TODO(phase-1): spawn IDA headless per pending decompilation, then ingest its export.
+interface PendingDecomp {
+	id: number;
+	mode: 'raw' | 'broma';
+	binaryId: number;
+	versionId: string;
+	platformId: string;
+	fileName: string;
 }
 
-console.log('[worker] starting');
-tick();
-setInterval(tick, 15_000);
+function claimPending(): PendingDecomp | null {
+	const db = getDb();
+	const row = db
+		.prepare(
+			`SELECT
+				d.id,
+				d.mode,
+				d.binary_id AS binaryId,
+				b.version_id AS versionId,
+				b.platform_id AS platformId,
+				b.file_name AS fileName
+			FROM decompilations d
+			JOIN binaries b ON b.id = d.binary_id
+			WHERE d.status = 'pending'
+			ORDER BY d.id
+			LIMIT 1`
+		)
+		.get() as unknown as PendingDecomp | undefined;
+
+	if (!row) return null;
+
+	db.prepare(
+		"UPDATE decompilations SET status = 'running', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?"
+	).run(row.id);
+	return row;
+}
+
+function ensureIdaUserDir(): string {
+	const dir = path.join(config.dataDir, 'ida-user');
+	mkdirSync(path.join(dir, 'cfg'), { recursive: true });
+	writeFileSync(path.join(dir, 'cfg', 'hexrays.cfg'), HEXRAYS_OVERRIDE);
+	return dir;
+}
+
+function runIda(decomp: PendingDecomp): Promise<void> {
+	const binaryPath = path.join(config.uploadsDir, decomp.versionId, decomp.platformId, decomp.fileName);
+	const outDir = path.join(config.exportsDir, String(decomp.id));
+	mkdirSync(outDir, { recursive: true });
+	const logPath = path.join(outDir, 'ida.log');
+	const idaUserDir = ensureIdaUserDir();
+
+	return new Promise((resolve, reject) => {
+		const child = spawn(env.idaPath, ['-A', '-c', `-L${logPath}`, `-S${SCRIPT_PATH}`, binaryPath], {
+			env: {
+				...process.env,
+				IDAUSR: idaUserDir,
+				IDA_EXPORT_OUT: outDir,
+				IDA_EXPORT_MODE: decomp.mode,
+				BROMA_PLUGIN_DIR: env.bromaPluginDir
+			},
+			stdio: 'ignore'
+		});
+
+		let settled = false;
+		const done = (error?: Error) => {
+			if (settled) return;
+			settled = true;
+			if (error) reject(error);
+			else resolve();
+		};
+		child.on('error', (error) => done(error));
+		child.on('exit', (code) =>
+			done(code === 0 ? undefined : new Error(`IDA exited with code ${code}`))
+		);
+	});
+}
+
+async function processNext(): Promise<boolean> {
+	const decomp = claimPending();
+	if (!decomp) return false;
+
+	console.log(
+		`[worker] decompiling #${decomp.id} (${decomp.versionId}/${decomp.platformId}/${decomp.fileName}, ${decomp.mode})`
+	);
+	try {
+		await runIda(decomp);
+		const ndjson = path.join(config.exportsDir, String(decomp.id), 'functions.ndjson');
+		const count = await ingestDecompilation(decomp.id, ndjson);
+		console.log(`[worker] done #${decomp.id}: ${count} functions`);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		getDb()
+			.prepare(
+				"UPDATE decompilations SET status = 'failed', error = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?"
+			)
+			.run(message, decomp.id);
+		console.error(`[worker] failed #${decomp.id}:`, message);
+	}
+	return true;
+}
+
+async function loop(): Promise<void> {
+	console.log('[worker] starting');
+	for (;;) {
+		try {
+			const worked = await processNext();
+			if (!worked) await new Promise((resolve) => setTimeout(resolve, 10_000));
+		} catch (error) {
+			console.error('[worker] error:', error);
+			await new Promise((resolve) => setTimeout(resolve, 10_000));
+		}
+	}
+}
+
+loop();
+

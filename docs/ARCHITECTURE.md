@@ -22,8 +22,8 @@ src/
     server/    DB, env, repository, decompilation pipeline (bun:sqlite, node builtins)
     client/    Svelte components + helpers (CodeMirror, stores)
   routes/      SvelteKit pages + API
-worker/        standalone Bun entrypoint that polls for decomp jobs (runs IDA)
-ida/           IDA Python export scripts + BromaIDA glue (used inside the worker image)
+worker/        decomp job loop (index.ts) + the IDA export script it runs (export.py)
+ida/           (gitignored) IDA Pro binaries + BromaIDA plugin, mounted into the worker
 docs/          design documents
 ```
 
@@ -115,7 +115,7 @@ in the other views. Diffing compares these structured rows, not raw text.
 1. Admin uploads a binary → stored under `DATA_DIR/uploads/<version>/<platform>/`.
 2. A `binaries` + `decompilations` row is created with status `pending`.
 3. The `worker` polls for pending decompilations, spawns IDA headless
-   (`idat64 -A -S"export.py" <binary>`), applies BromaIDA for `broma` mode, and dumps JSON.
+   (`idat -A -c -S"export.py" <binary>`), applies BromaIDA for `broma` mode, and dumps JSON.
 4. The worker ingests JSON into SQLite (`functions`, `function_calls`, `member_uses`,
    `function_content`) and flips status to `done`.
 5. Clients read through the API.

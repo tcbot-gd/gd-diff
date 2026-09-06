@@ -9,8 +9,7 @@ export const env = {
 	host: readString('HOST', '0.0.0.0'),
 	port: Number(readString('PORT', '3000')),
 	adminPassword: readString('ADMIN_PASSWORD', ''),
-	ida64Path: readString('IDA64_PATH', '/opt/ida/idat64'),
-	ida32Path: readString('IDA32_PATH', '/opt/ida/idat'),
+	idaPath: readString('IDA_PATH', 'idat.exe'),
 	bromaPluginDir: readString('BROMA_PLUGIN_DIR', '/opt/ida/plugins'),
 	bindingsRepoUrl: readString('BINDINGS_REPO_URL', 'https://github.com/geode-sdk/bindings'),
 	bindingsCommit: readString('BINDINGS_COMMIT', '')

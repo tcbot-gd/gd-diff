@@ -14,7 +14,6 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/build ./build
 COPY --from=build /app/src ./src
 COPY --from=build /app/worker ./worker
-COPY --from=build /app/ida ./ida
 VOLUME /data
 ENV DATA_DIR=/data
 EXPOSE 3000
