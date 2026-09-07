@@ -87,18 +87,20 @@ function ensureIdaUserDir(): string {
 	return dir;
 }
 
-function copyDatabaseForBroma(decomp: PendingDecomp, outDir: string): string {
+function copyDatabaseForBroma(decomp: PendingDecomp): string {
 	// Copy the analyzed binary + its IDA database files (.i64/.id0/.id1/.nam/.til)
-	// from uploads into the broma output dir, so IDA reuses the raw analysis
-	// instead of re-analyzing from scratch.
+	// from uploads into a stable per-binary `databases/.../broma` dir so the raw
+	// analysis is reused, and the broma-annotated IDB persists there for sharing.
+	const bromaDir = path.join(config.databasesDir, decomp.versionId, decomp.platformId, decomp.fileName, 'broma');
+	mkdirSync(bromaDir, { recursive: true });
 	const srcDir = path.join(config.uploadsDir, decomp.versionId, decomp.platformId);
 	const prefix = decomp.fileName;
 	for (const file of readdirSync(srcDir)) {
 		if (file === prefix || file.startsWith(prefix + '.')) {
-			copyFileSync(path.join(srcDir, file), path.join(outDir, file));
+			copyFileSync(path.join(srcDir, file), path.join(bromaDir, file));
 		}
 	}
-	return path.join(outDir, decomp.fileName);
+	return path.join(bromaDir, decomp.fileName);
 }
 
 function runIda(decomp: PendingDecomp, binaryPath: string, fresh: boolean): Promise<void> {
@@ -246,7 +248,7 @@ async function processNext(): Promise<boolean> {
 		let fresh = true;
 		if (decomp.mode === 'broma') {
 			// Reuse the raw decompilation's analyzed database instead of re-analyzing.
-			binaryPath = copyDatabaseForBroma(decomp, outDir);
+			binaryPath = copyDatabaseForBroma(decomp);
 			fresh = false;
 		} else {
 			binaryPath = path.join(config.uploadsDir, decomp.versionId, decomp.platformId, decomp.fileName);

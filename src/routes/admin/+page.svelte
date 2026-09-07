@@ -55,7 +55,11 @@
 			});
 			if (res.ok) {
 				const data = await res.json();
-				status = `Uploaded ${fileName} (binary #${data.binary.id}) — decompilation queued`;
+				if (data.merged && Array.isArray(data.binaries)) {
+					status = `Uploaded merged ${fileName} → ${data.binaries.map((b: { platformId: string }) => b.platformId).join(' + ')} — decompilation queued`;
+				} else {
+					status = `Uploaded ${fileName} (binary #${data.binary.id}) — decompilation queued`;
+				}
 				reset();
 			} else {
 				const body = await res.text().catch(() => '');
