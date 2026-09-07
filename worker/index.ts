@@ -3,6 +3,7 @@ import {
 	mkdirSync,
 	writeFileSync,
 	readFileSync,
+	appendFileSync,
 	existsSync,
 	readdirSync,
 	copyFileSync,
@@ -300,12 +301,44 @@ function acceptIdaEula(): void {
 	if (!existsSync(marker)) writeFileSync(marker, 'accepted\n');
 }
 
+function configureIdaPython(): void {
+	const dir = idaUserDir();
+	mkdirSync(path.join(dir, 'cfg'), { recursive: true });
+	const cfgPath = path.join(dir, 'cfg', 'ida.cfg');
+
+	// Don't clobber an existing user config that already pins Python.
+	if (existsSync(cfgPath) && readFileSync(cfgPath, 'utf-8').includes('Python3TargetDLL')) return;
+
+	// Resolve the actual libpython from python3 on PATH — IDA won't find it in a
+	// minimal container image on its own (Python3TargetDLL unset -> IDAPython dead).
+	let libpython = '';
+	try {
+		const result = execSync(
+			`python3 -c "import sysconfig; print(sysconfig.get_config_var('LIBDIR') + '/' + sysconfig.get_config_var('LDLIBRARY'))"`,
+			{ encoding: 'utf-8' }
+		).trim();
+		if (result && !result.includes('None')) libpython = result;
+	} catch {
+		// python3 missing; nothing to configure
+	}
+
+	if (!libpython) {
+		console.warn('[worker] could not resolve libpython — IDAPython/BromaIDA may not load');
+		return;
+	}
+
+	const separator = existsSync(cfgPath) ? '\n' : '';
+	appendFileSync(cfgPath, `${separator}Python3TargetDLL = "${libpython}";\n`);
+	console.log(`[worker] configured IDA Python: ${libpython}`);
+}
+
 function setup(): void {
 	try {
 		ensureBindings();
 		ensureBromaIda();
 		ensureIdaInstall();
 		acceptIdaEula();
+		configureIdaPython();
 	} catch (error) {
 		console.error('[worker] setup error (continuing):', error);
 	}
