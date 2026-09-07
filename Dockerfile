@@ -12,6 +12,8 @@ FROM oven/bun:1-slim AS base
 WORKDIR /app
 ENV NODE_ENV=production
 ENV DATA_DIR=/data
+# adapter-node caps request bodies at 512K by default; binary uploads are far larger.
+ENV BODY_SIZE_LIMIT=Infinity
 COPY --from=build /app/package.json /app/bun.lock ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/build ./build

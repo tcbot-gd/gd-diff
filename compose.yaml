@@ -11,6 +11,7 @@ services:
       DATA_DIR: /data
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change-me}
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3000}
+      BODY_SIZE_LIMIT: Infinity
       VIRTUAL_HOST: ${DOMAIN}
       VIRTUAL_PORT: 3000
       LETSENCRYPT_HOST: ${DOMAIN}
