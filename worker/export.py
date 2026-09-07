@@ -262,7 +262,13 @@ def apply_broma_bindings():
 
     # Copy the .bro files to a temp dir, stripping the unsupported
     # [[renamed_from(...)]] attributes before pybroma parses them.
-    cleaned_dir = tempfile.mkdtemp(prefix="broma_bindings_")
+    # BromaCodegen resolves `bpath/../include/Geode/Enums.hpp`, so we mirror the
+    # repo layout (version dir + include/ as siblings) under the temp root.
+    import shutil
+
+    cleaned_root = tempfile.mkdtemp(prefix="broma_bindings_")
+    cleaned_dir = os.path.join(cleaned_root, version)
+    os.makedirs(cleaned_dir, exist_ok=True)
     for bfile in ("Cocos2d.bro", "Extras.bro", "FMOD.bro", "GeometryDash.bro", "Kazmath.bro"):
         src = os.path.join(bromas_dir, bfile)
         if not os.path.exists(src):
@@ -271,6 +277,11 @@ def apply_broma_bindings():
             content = fh.read()
         with open(os.path.join(cleaned_dir, bfile), "w", encoding="utf-8") as fh:
             fh.write(_strip_renamed_from(content))
+
+    include_src = os.path.join(bindings_root, "bindings", "include")
+    if os.path.isdir(include_src):
+        shutil.copytree(include_src, os.path.join(cleaned_root, "include"))
+
     print("[export] prepared broma bindings in %s" % cleaned_dir)
 
     # Make BromaIDA importable and suppress its popups for headless (-A) mode.
