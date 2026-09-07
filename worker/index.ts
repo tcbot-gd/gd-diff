@@ -3,7 +3,6 @@ import {
 	mkdirSync,
 	writeFileSync,
 	readFileSync,
-	appendFileSync,
 	existsSync,
 	readdirSync,
 	copyFileSync,
@@ -302,34 +301,55 @@ function acceptIdaEula(): void {
 }
 
 function configureIdaPython(): void {
+	// Use idapyswitch (IDA's supported way to bind IDAPython to a Python install).
+	// A prior version wrote Python3TargetDLL into ida.cfg directly — that's invalid
+	// config and IDA rejects it — so remove it if present and switch properly.
 	const dir = idaUserDir();
-	mkdirSync(path.join(dir, 'cfg'), { recursive: true });
+	const idaRoot = env.idaDir || (env.idaPath ? path.dirname(env.idaPath) : '');
+	const idapyswitch = env.idaDir
+		? path.join(env.idaDir, 'idapyswitch')
+		: path.join(idaRoot, 'idapyswitch');
+
+	// Clean up the invalid Python3TargetDLL line from a previous run.
 	const cfgPath = path.join(dir, 'cfg', 'ida.cfg');
-
-	// Don't clobber an existing user config that already pins Python.
-	if (existsSync(cfgPath) && readFileSync(cfgPath, 'utf-8').includes('Python3TargetDLL')) return;
-
-	// Resolve the actual libpython from python3 on PATH — IDA won't find it in a
-	// minimal container image on its own (Python3TargetDLL unset -> IDAPython dead).
-	let libpython = '';
-	try {
-		const result = execSync(
-			`python3 -c "import sysconfig; print(sysconfig.get_config_var('LIBDIR') + '/' + sysconfig.get_config_var('LDLIBRARY'))"`,
-			{ encoding: 'utf-8' }
-		).trim();
-		if (result && !result.includes('None')) libpython = result;
-	} catch {
-		// python3 missing; nothing to configure
+	if (existsSync(cfgPath)) {
+		const lines = readFileSync(cfgPath, 'utf-8').split(/\r?\n/);
+		const cleaned = lines.filter((l) => !l.trim().startsWith('Python3TargetDLL'));
+		if (cleaned.length !== lines.length) {
+			writeFileSync(cfgPath, cleaned.join('\n'));
+			console.log('[worker] removed legacy Python3TargetDLL from ida.cfg');
+		}
 	}
 
-	if (!libpython) {
-		console.warn('[worker] could not resolve libpython — IDAPython/BromaIDA may not load');
+	if (!existsSync(idapyswitch)) {
+		console.warn('[worker] idapyswitch not found — skipping IDA Python configuration');
 		return;
 	}
 
-	const separator = existsSync(cfgPath) ? '\n' : '';
-	appendFileSync(cfgPath, `${separator}Python3TargetDLL = "${libpython}";\n`);
-	console.log(`[worker] configured IDA Python: ${libpython}`);
+	let pythonCmd = '';
+	for (const candidate of ['python3', 'python']) {
+		try {
+			execSync(`${candidate} --version`, { stdio: 'ignore' });
+			pythonCmd = candidate;
+			break;
+		} catch {
+			// try next
+		}
+	}
+	if (!pythonCmd) {
+		console.warn('[worker] no python3/python on PATH — cannot configure IDAPython');
+		return;
+	}
+
+	// "--auto" selects / works out the Python contributed with IDA itself if the
+	// requested path isn't provided. Passing the resolved executable makes the
+	// choice deterministic (works for our user-installed python3 too).
+	try {
+		execSync(`"${idapyswitch}" --auto "${pythonCmd}"`, { stdio: 'ignore' });
+		console.log(`[worker] idapyswitch: bound IDAPython to ${pythonCmd}`);
+	} catch (error) {
+		console.warn(`[worker] idapyswitch failed: ${error instanceof Error ? error.message : String(error)}`);
+	}
 }
 
 function setup(): void {
