@@ -3,6 +3,7 @@
 	import { goto, invalidateAll } from '$app/navigation';
 	import type { PageData } from './$types';
 	import type { DecompilationProgress } from '$lib/shared/modes';
+	import DownloadUnlock from '$lib/client/DownloadUnlock.svelte';
 
 	let { data }: { data: PageData } = $props();
 
@@ -93,45 +94,16 @@
 		await goto(q ? `${base}?q=${encodeURIComponent(q)}` : base);
 	}
 
-	let dlPassword = $state('');
-	let dlStatus = $state<string | null>(null);
-	let dlError = $state<string | null>(null);
+	let unlocked = $state(false);
 
-	async function downloadFile(kind: 'binary' | 'raw' | 'broma') {
-		dlStatus = null;
-		dlError = null;
-		if (!dlPassword) {
-			dlError = 'Enter the download password';
-			return;
-		}
+	function downloadHref(kind: 'binary' | 'raw' | 'broma'): string {
 		const params = new URLSearchParams({
 			version: data.version.id,
 			platform: data.platform.id,
 			fileName: data.binary.fileName
 		});
-		const endpoint = kind === 'binary' ? '/api/download/binary' : '/api/download/idb';
 		if (kind !== 'binary') params.set('mode', kind);
-		try {
-			const res = await fetch(`${endpoint}?${params}`, {
-				headers: { Authorization: `Basic ${btoa(`download:${dlPassword}`)}` }
-			});
-			if (!res.ok) {
-				dlError = res.status === 401 ? 'Wrong download password' : 'Nothing to download yet';
-				return;
-			}
-			const blob = await res.blob();
-			const m = res.headers.get('Content-Disposition')?.match(/filename="([^"]*)"/);
-			const filename = m?.[1] ?? (kind === 'binary' ? data.binary.fileName : `${data.binary.fileName}.i64`);
-			const url = URL.createObjectURL(blob);
-			const a = document.createElement('a');
-			a.href = url;
-			a.download = filename;
-			a.click();
-			URL.revokeObjectURL(url);
-			dlStatus = `Downloaded ${filename}`;
-		} catch {
-			dlError = 'Download failed';
-		}
+		return kind === 'binary' ? `/api/download/binary?${params}` : `/api/download/idb?${params}`;
 	}
 </script>
 
@@ -192,36 +164,33 @@
 	<details class="rounded-sm border border-border bg-surface">
 		<summary class="cursor-pointer px-3 py-2 text-sm text-muted">Download binary / IDBs</summary>
 		<div class="space-y-3 border-t border-border px-3 py-3">
-			<div class="flex flex-wrap items-center gap-2">
-				<input
-					type="password"
-					bind:value={dlPassword}
-					placeholder="Download password"
-					class="w-64 rounded-sm border border-border bg-surface-2 px-2 py-1 font-mono text-sm text-fg"
-				/>
-			</div>
+			<DownloadUnlock bind:unlocked />
 			<div class="flex flex-wrap gap-2">
-				<button
-					onclick={() => downloadFile('binary')}
-					class="rounded-sm border border-border bg-surface-2 px-3 py-1 text-sm text-fg hover:border-accent"
+				<a
+					href={downloadHref('binary')}
+					class={unlocked
+						? 'rounded-sm border border-border bg-surface-2 px-3 py-1 text-sm text-fg hover:border-accent'
+						: 'pointer-events-none rounded-sm border border-border/50 bg-surface-2 px-3 py-1 text-sm text-muted/50'}
 				>
 					Binary
-				</button>
-				<button
-					onclick={() => downloadFile('raw')}
-					class="rounded-sm border border-border bg-surface-2 px-3 py-1 text-sm text-fg hover:border-accent"
+				</a>
+				<a
+					href={downloadHref('raw')}
+					class={unlocked
+						? 'rounded-sm border border-border bg-surface-2 px-3 py-1 text-sm text-fg hover:border-accent'
+						: 'pointer-events-none rounded-sm border border-border/50 bg-surface-2 px-3 py-1 text-sm text-muted/50'}
 				>
 					Raw IDB
-				</button>
-				<button
-					onclick={() => downloadFile('broma')}
-					class="rounded-sm border border-border bg-surface-2 px-3 py-1 text-sm text-fg hover:border-accent"
+				</a>
+				<a
+					href={downloadHref('broma')}
+					class={unlocked
+						? 'rounded-sm border border-border bg-surface-2 px-3 py-1 text-sm text-fg hover:border-accent'
+						: 'pointer-events-none rounded-sm border border-border/50 bg-surface-2 px-3 py-1 text-sm text-muted/50'}
 				>
 					Broma IDB
-				</button>
+				</a>
 			</div>
-			{#if dlStatus}<p class="text-xs text-ok">{dlStatus}</p>{/if}
-			{#if dlError}<p class="text-xs text-warn">{dlError}</p>{/if}
 		</div>
 	</details>
 

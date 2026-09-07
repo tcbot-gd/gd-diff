@@ -8,7 +8,9 @@ import { isPlatformId } from '$lib/shared/platforms';
 import { resolveIdbPath } from '$lib/server/download';
 
 export const GET: RequestHandler = ({ request, url }) => {
-	if (!isDownloader(request.headers.get('authorization'))) throw error(401, 'Unauthorized');
+	if (!isDownloader(request.headers.get('authorization'), request.headers.get('cookie'))) {
+		throw error(401, 'Unauthorized');
+	}
 
 	const versionId = url.searchParams.get('version') ?? '';
 	const platformId = url.searchParams.get('platform') ?? '';

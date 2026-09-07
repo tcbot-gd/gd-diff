@@ -456,6 +456,35 @@ export function listBinariesAdmin(): AdminBinary[] {
 	}));
 }
 
+export interface ExplorerBinary {
+	versionId: string;
+	platformId: string;
+	fileName: string;
+	role: string;
+	hasRaw: boolean;
+	hasBroma: boolean;
+}
+
+export function listBinariesForExplorer(): ExplorerBinary[] {
+	const rows = getDb()
+		.prepare(
+			`SELECT
+				b.version_id AS versionId,
+				b.platform_id AS platformId,
+				b.file_name AS fileName,
+				b.role,
+				MAX(CASE WHEN d.mode = 'raw' AND d.status = 'done' THEN 1 ELSE 0 END) AS hasRaw,
+				MAX(CASE WHEN d.mode = 'broma' AND d.status = 'done' THEN 1 ELSE 0 END) AS hasBroma
+			FROM binaries b
+			LEFT JOIN decompilations d ON d.binary_id = b.id
+			LEFT JOIN versions v ON v.id = b.version_id
+			GROUP BY b.id
+			ORDER BY v.ord DESC, b.platform_id, b.file_name`
+		)
+		.all() as unknown as (Omit<ExplorerBinary, 'hasRaw' | 'hasBroma'> & { hasRaw: number; hasBroma: number })[];
+	return rows.map((r) => ({ ...r, hasRaw: !!r.hasRaw, hasBroma: !!r.hasBroma }));
+}
+
 export function requeueDecompilation(id: number): boolean {
 	const db = getDb();
 	if (!db.prepare('SELECT 1 FROM decompilations WHERE id = ?').get(id)) return false;
