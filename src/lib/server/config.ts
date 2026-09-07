@@ -6,5 +6,5 @@ export const config = {
 	dbPath: path.join(env.dataDir, 'gd-diff.sqlite'),
 	uploadsDir: path.join(env.dataDir, 'uploads'),
 	exportsDir: path.join(env.dataDir, 'exports'),
-	bindingsDir: path.join(env.dataDir, 'bindings')
+	bindingsDir: env.bindingsDir || path.join(env.dataDir, 'bindings')
 };

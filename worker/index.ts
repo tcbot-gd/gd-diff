@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, copyFileSync } from 'node:fs';
 import path from 'node:path';
 import { getDb } from '../src/lib/server/db';
 import { env } from '../src/lib/server/env';
@@ -36,6 +36,13 @@ function claimPending(): PendingDecomp | null {
 			FROM decompilations d
 			JOIN binaries b ON b.id = d.binary_id
 			WHERE d.status = 'pending'
+				AND (
+					d.mode != 'broma'
+					OR EXISTS (
+						SELECT 1 FROM decompilations r
+						WHERE r.binary_id = d.binary_id AND r.mode = 'raw' AND r.status = 'done'
+					)
+				)
 			ORDER BY d.id
 			LIMIT 1`
 		)
@@ -66,8 +73,21 @@ function ensureIdaUserDir(): string {
 	return dir;
 }
 
-function runIda(decomp: PendingDecomp): Promise<void> {
-	const binaryPath = path.join(config.uploadsDir, decomp.versionId, decomp.platformId, decomp.fileName);
+function copyDatabaseForBroma(decomp: PendingDecomp, outDir: string): string {
+	// Copy the analyzed binary + its IDA database files (.i64/.id0/.id1/.nam/.til)
+	// from uploads into the broma output dir, so IDA reuses the raw analysis
+	// instead of re-analyzing from scratch.
+	const srcDir = path.join(config.uploadsDir, decomp.versionId, decomp.platformId);
+	const prefix = decomp.fileName;
+	for (const file of readdirSync(srcDir)) {
+		if (file === prefix || file.startsWith(prefix + '.')) {
+			copyFileSync(path.join(srcDir, file), path.join(outDir, file));
+		}
+	}
+	return path.join(outDir, decomp.fileName);
+}
+
+function runIda(decomp: PendingDecomp, binaryPath: string, fresh: boolean): Promise<void> {
 	const outDir = path.join(config.exportsDir, String(decomp.id));
 	mkdirSync(outDir, { recursive: true });
 	const logPath = path.join(outDir, 'ida.log');
@@ -75,13 +95,19 @@ function runIda(decomp: PendingDecomp): Promise<void> {
 	const idaUserDir = ensureIdaUserDir();
 
 	return new Promise((resolve, reject) => {
-		const child = spawn(env.idaPath, ['-A', '-c', `-L${logPath}`, `-S${SCRIPT_PATH}`, binaryPath], {
+		const args = ['-A'];
+		if (fresh) args.push('-c');
+		args.push(`-L${logPath}`, `-S${SCRIPT_PATH}`, binaryPath);
+		const child = spawn(env.idaPath, args, {
 			env: {
 				...process.env,
 				IDAUSR: idaUserDir,
 				IDA_EXPORT_OUT: outDir,
 				IDA_EXPORT_MODE: decomp.mode,
-				BROMA_PLUGIN_DIR: env.bromaPluginDir
+				IDA_EXPORT_PLATFORM: decomp.platformId,
+				IDA_EXPORT_VERSION: decomp.versionId,
+				BROMA_PLUGIN_DIR: env.bromaPluginDir,
+				BROMA_BINDINGS_DIR: config.bindingsDir
 			},
 			stdio: 'ignore'
 		});
@@ -182,8 +208,18 @@ async function processNext(): Promise<boolean> {
 		`[worker] decompiling #${decomp.id} (${decomp.versionId}/${decomp.platformId}/${decomp.fileName}, ${decomp.mode})`
 	);
 	try {
-		await runIda(decomp);
 		const outDir = path.join(config.exportsDir, String(decomp.id));
+		mkdirSync(outDir, { recursive: true });
+		let binaryPath: string;
+		let fresh = true;
+		if (decomp.mode === 'broma') {
+			// Reuse the raw decompilation's analyzed database instead of re-analyzing.
+			binaryPath = copyDatabaseForBroma(decomp, outDir);
+			fresh = false;
+		} else {
+			binaryPath = path.join(config.uploadsDir, decomp.versionId, decomp.platformId, decomp.fileName);
+		}
+		await runIda(decomp, binaryPath, fresh);
 		const ndjson = path.join(outDir, 'functions.ndjson');
 		const imageBase = readImageBase(path.join(outDir, 'meta.json'));
 		const count = await ingestDecompilation(decomp.id, ndjson, imageBase);

@@ -14,6 +14,8 @@ Output:
 
 import json
 import os
+import re
+import sys
 import time
 import traceback
 
@@ -228,16 +230,85 @@ def export_members(cfunc):
     return result
 
 
-def apply_broma_bindings():
-    """Apply geode-sdk bindings before decompiling (broma mode).
+def _strip_renamed_from(text):
+    """Remove `[[renamed_from(...)]]` attributes, which pybroma doesn't support yet."""
+    return re.sub(r"[ \t]*\[\[renamed_from\([^)]*\)\]\][ \t]*\n?", "", text)
 
-    BromaIDA loads a bindings checkout and applies names/types. The exact API is
-    plugin-specific; wire it up here once the plugin is provided. For now this is
-    a no-op placeholder so the raw export path is fully functional.
+
+def apply_broma_bindings():
+    """Apply geode-sdk bindings to the (already analyzed) database via BromaIDA.
+
+    The broma pass loads a copy of the raw pass's analyzed database (so we analyze
+    once), then imports bindings + types through BromaIDA before exporting.
     """
     if MODE != "broma":
         return
-    print("[export] broma mode requested; bindings application is a stub")
+
+    import tempfile
+
+    broma_plugin_dir = os.environ.get("BROMA_PLUGIN_DIR", "")
+    bindings_root = os.environ.get("BROMA_BINDINGS_DIR", "")
+    version = os.environ.get("IDA_EXPORT_VERSION", "")
+    platform = os.environ.get("IDA_EXPORT_PLATFORM", "win")
+
+    if not broma_plugin_dir or not bindings_root or not version:
+        raise RuntimeError(
+            "broma mode requires BROMA_PLUGIN_DIR, BROMA_BINDINGS_DIR and IDA_EXPORT_VERSION"
+        )
+
+    bromas_dir = os.path.join(bindings_root, "bindings", version)
+    if not os.path.isdir(bromas_dir):
+        raise RuntimeError("bindings directory not found: %s" % bromas_dir)
+
+    # Copy the .bro files to a temp dir, stripping the unsupported
+    # [[renamed_from(...)]] attributes before pybroma parses them.
+    cleaned_dir = tempfile.mkdtemp(prefix="broma_bindings_")
+    for bfile in ("Cocos2d.bro", "Extras.bro", "FMOD.bro", "GeometryDash.bro", "Kazmath.bro"):
+        src = os.path.join(bromas_dir, bfile)
+        if not os.path.exists(src):
+            continue
+        with open(src, "r", encoding="utf-8") as fh:
+            content = fh.read()
+        with open(os.path.join(cleaned_dir, bfile), "w", encoding="utf-8") as fh:
+            fh.write(_strip_renamed_from(content))
+    print("[export] prepared broma bindings in %s" % cleaned_dir)
+
+    # Make BromaIDA importable and suppress its popups for headless (-A) mode.
+    sys.path.insert(0, broma_plugin_dir)
+
+    from ida_kernwin import ASKBTN_BTN1
+    from broma_ida.ui.ask_popup import AskPopup
+    from broma_ida.ui.simple_popup import SimplePopup
+
+    AskPopup.show = lambda self: ASKBTN_BTN1
+    SimplePopup.show = lambda self: 1
+
+    from broma_ida.data.data_manager import DataManager
+    from broma_ida.metadata import PLUGIN_NAME
+    from platformdirs import PlatformDirs
+
+    shelf_dir = PlatformDirs(appname=PLUGIN_NAME, appauthor=False)
+    dm = DataManager()
+    dm.init(shelf_dir.user_config_path / "shelf")
+    dm.set("disable_input_hash_check", True)
+    dm.set("always_overwrite_merge_information", True)
+    dm.set("always_overwrite_idb", True)
+    dm.set("ignore_mismatched_structs", True)
+    dm.set("import_types", True)
+
+    types_dir = os.path.join(broma_plugin_dir, "broma_ida", "types")
+    if not os.path.isdir(types_dir):
+        types_dir = os.path.join(broma_plugin_dir, "types")
+
+    from pathlib import Path
+    from broma_ida.broma.importer import BromaImporter
+
+    print("[export] applying broma bindings (platform=%s)" % platform)
+    importer = BromaImporter(platform, Path(types_dir), Path(cleaned_dir))
+    importer.parse_bromas()
+    importer.import_into_idb()
+    dm.close()
+    print("[export] broma bindings applied")
 
 
 def write_progress(phase, done, total, current=None, current_size=None):
@@ -279,7 +350,6 @@ def main():
     write_progress("analyzing", 0, None)
 
     configure_decompiler()
-    apply_broma_bindings()
     try:
         ida_hexrays.init_hexrays_plugin()
     except Exception:
@@ -288,6 +358,8 @@ def main():
     import ida_auto
 
     ida_auto.auto_wait()
+
+    apply_broma_bindings()
 
     funcs = list(idautils.Functions())
     total = len(funcs)

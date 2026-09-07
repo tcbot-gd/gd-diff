@@ -27,6 +27,7 @@ export const env = {
 	adminPassword: readString('ADMIN_PASSWORD', ''),
 	idaPath: readString('IDA_PATH', 'idat.exe'),
 	bromaPluginDir: readString('BROMA_PLUGIN_DIR', '/opt/ida/plugins'),
+	bindingsDir: readString('BINDINGS_DIR', ''),
 	bindingsRepoUrl: readString('BINDINGS_REPO_URL', 'https://github.com/geode-sdk/bindings'),
 	bindingsCommit: readString('BINDINGS_COMMIT', '')
 };
