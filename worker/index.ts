@@ -269,32 +269,28 @@ function ensureBromaIda(): void {
 	if (!env.bromaRepoUrl || !env.bromaPluginDir) return;
 	mkdirSync(env.bromaPluginDir, { recursive: true });
 	const pluginFile = path.join(env.bromaPluginDir, 'BromaIDA.py');
-	const reqFile = path.join(env.bromaPluginDir, 'requirements.txt');
 
-	if (!existsSync(pluginFile)) {
-		console.log(`[worker] installing BromaIDA: ${env.bromaRepoUrl}`);
-		const tmp = path.join(config.dataDir, '.bromaida-tmp');
-		rmSync(tmp, { recursive: true, force: true });
-		sh(`git clone --depth 1 ${env.bromaRepoUrl} ${tmp}`);
-		cpSync(path.join(tmp, 'BromaIDA.py'), pluginFile);
-		cpSync(path.join(tmp, 'broma_ida'), path.join(env.bromaPluginDir, 'broma_ida'), { recursive: true });
-		if (existsSync(path.join(tmp, 'requirements.txt'))) {
-			copyFileSync(path.join(tmp, 'requirements.txt'), reqFile);
-		}
-		rmSync(tmp, { recursive: true, force: true });
-	}
-
-	if (!existsSync(reqFile)) {
-		console.error('[worker] BromaIDA requirements.txt not found — plugin may be incomplete');
-		return;
-	}
+	// Always clone fresh (cheap, depth 1) and pip-install straight from that
+	// checkout, so a stale plugin left over from an older deploy (which is
+	// exactly what left `platformdirs` uninstalled) never causes the
+	// dependency install to be skipped. requirements.txt is only ever read
+	// from the clone — it's not something the plugin dir needs to contain.
+	console.log(`[worker] fetching BromaIDA: ${env.bromaRepoUrl}`);
+	const tmp = path.join(config.dataDir, '.bromaida-tmp');
+	rmSync(tmp, { recursive: true, force: true });
+	sh(`git clone --depth 1 ${env.bromaRepoUrl} ${tmp}`);
 	try {
+		const reqFile = path.join(tmp, 'requirements.txt');
+		if (!existsSync(reqFile)) {
+			throw new Error(`requirements.txt not found in ${env.bromaRepoUrl} checkout`);
+		}
 		sh(`python3 -m pip install --break-system-packages --no-cache-dir -r "${reqFile}"`);
-	} catch (error) {
-		console.error(
-			'[worker] failed to install BromaIDA Python deps:',
-			error instanceof Error ? error.message : String(error)
-		);
+		if (!existsSync(pluginFile)) {
+			cpSync(path.join(tmp, 'BromaIDA.py'), pluginFile);
+			cpSync(path.join(tmp, 'broma_ida'), path.join(env.bromaPluginDir, 'broma_ida'), { recursive: true });
+		}
+	} finally {
+		rmSync(tmp, { recursive: true, force: true });
 	}
 }
 
@@ -331,16 +327,15 @@ function acceptIdaEula(): void {
 }
 
 function configureIdaPython(): void {
-	// Use idapyswitch (IDA's supported way to bind IDAPython to a Python install).
-	// A prior version wrote Python3TargetDLL into ida.cfg directly — that's invalid
-	// config and IDA rejects it — so remove it if present and switch properly.
+	// IDAPython's Python binding lives in <usrdir>/cfg/python.cfg. idapyswitch is
+	// the supported tool to set it, but it may write to a different user dir
+	// (e.g. ~/.idapro) than our IDAUSR. So after running it we self-heal
+	// python.cfg inside IDAUSR to make the config deterministic.
 	const dir = idaUserDir();
-	const idaRoot = env.idaDir || (env.idaPath ? path.dirname(env.idaPath) : '');
-	const idapyswitch = env.idaDir
-		? path.join(env.idaDir, 'idapyswitch')
-		: path.join(idaRoot, 'idapyswitch');
+	mkdirSync(path.join(dir, 'cfg'), { recursive: true });
 
-	// Clean up the invalid Python3TargetDLL line from a previous run.
+	// Clean up the invalid Python3TargetDLL line from a previous run (it belongs in
+	// python.cfg, not ida.cfg).
 	const cfgPath = path.join(dir, 'cfg', 'ida.cfg');
 	if (existsSync(cfgPath)) {
 		const lines = readFileSync(cfgPath, 'utf-8').split(/\r?\n/);
@@ -351,13 +346,7 @@ function configureIdaPython(): void {
 		}
 	}
 
-	if (!existsSync(idapyswitch)) {
-		console.warn('[worker] idapyswitch not found — skipping IDA Python configuration');
-		return;
-	}
-
-	// Resolve the path to the actual libpython library. idapyswitch needs the
-	// library path (e.g. .../libpython3.13.so), not the interpreter executable.
+	// Resolve the path to the actual libpython library.
 	let libpython = '';
 	try {
 		const result = execSync(
@@ -368,29 +357,48 @@ function configureIdaPython(): void {
 	} catch {
 		// python3 missing
 	}
-
-	const run = (args: string) => {
-		try {
-			execSync(`"${idapyswitch}" ${args}`, { stdio: 'ignore' });
-			console.log(`[worker] idapyswitch: ${args}`);
-			return true;
-		} catch (error) {
-			console.warn(`[worker] idapyswitch ${args} failed: ${error instanceof Error ? error.message : String(error)}`);
-			return false;
-		}
-	};
-
-	if (libpython) {
-		// Deterministic: point IDA at the exact libpython we installed python deps against.
-		if (run(`--force-path "${libpython}"`)) return;
-	} else {
-		console.warn('[worker] could not resolve libpython path');
+	if (!libpython) {
+		console.warn('[worker] could not resolve libpython — IDAPython may not load');
+		return;
 	}
 
-	// Fallback: let idapyswitch scan the filesystem and auto-pick a Python.
-	if (run('--auto-apply')) return;
+	// 1) Preferred: let idapyswitch bind IDA to libpython.
+	const idaRoot = env.idaDir || (env.idaPath ? path.dirname(env.idaPath) : '');
+	const idapyswitch = env.idaDir ? path.join(env.idaDir, 'idapyswitch') : path.join(idaRoot, 'idapyswitch');
+	if (existsSync(idapyswitch)) {
+		try {
+			execSync(`"${idapyswitch}" --force-path "${libpython}"`, {
+				env: { ...process.env, IDAUSR: dir },
+				stdio: 'ignore'
+			});
+			console.log(`[worker] idapyswitch bound IDA Python to ${libpython}`);
+		} catch (error) {
+			console.warn(
+				`[worker] idapyswitch failed:`,
+				error instanceof Error ? error.message : String(error)
+			);
+		}
+	} else {
+		console.warn('[worker] idapyswitch not found — writing python.cfg directly');
+	}
 
-	console.warn('[worker] IDA Python configuration failed');
+	// 2) Deterministic: ensure the binding is present in our IDAUSR's python.cfg so
+	// IDA definitely loads it even if idapyswitch wrote elsewhere.
+	const pyCfgPath = path.join(dir, 'cfg', 'python.cfg');
+	try {
+		const existing = existsSync(pyCfgPath) ? readFileSync(pyCfgPath, 'utf-8') : '';
+		const cleaned = existing
+			.split(/\r?\n/)
+			.filter((l) => {
+				const t = l.trim();
+				return !t.startsWith('Python3TargetDLL') && !/^\/\/\s*Python3TargetDLL/.test(t) && !/\/\*[\s\S]*?\*\//.test(t);
+			})
+			.join('\n');
+		writeFileSync(pyCfgPath, `${cleaned.replace(/\s+$/, '')}\n\nPython3TargetDLL = "${libpython}";\n`);
+		console.log(`[worker] configured ${pyCfgPath}`);
+	} catch (error) {
+		console.warn(`[worker] could not write python.cfg:`, error instanceof Error ? error.message : String(error));
+	}
 }
 
 function setup(): void {
