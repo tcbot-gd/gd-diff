@@ -26,7 +26,11 @@ export const env = {
 	port: Number(readString('PORT', '3000')),
 	adminPassword: readString('ADMIN_PASSWORD', ''),
 	idaPath: readString('IDA_PATH', 'idat.exe'),
+	idaUsr: readString('IDAUSR', ''),
+	idaHostDir: readString('IDA_HOST_DIR', ''),
+	idaDir: readString('IDA_DIR', ''),
 	bromaPluginDir: readString('BROMA_PLUGIN_DIR', '/opt/ida/plugins'),
+	bromaRepoUrl: readString('BROMA_REPO_URL', 'https://github.com/Stazzical/BromaIDA.git'),
 	bindingsDir: readString('BINDINGS_DIR', ''),
 	bindingsRepoUrl: readString('BINDINGS_REPO_URL', 'https://github.com/geode-sdk/bindings'),
 	bindingsCommit: readString('BINDINGS_COMMIT', '')

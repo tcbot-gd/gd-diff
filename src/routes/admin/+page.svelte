@@ -72,9 +72,72 @@
 			uploading = false;
 		}
 	}
+
+	interface AdminBinary {
+		id: number;
+		versionId: string;
+		platformId: string;
+		fileName: string;
+		role: string;
+		decompilations: { id: number; mode: string; status: string }[];
+	}
+
+	let adminBinaries = $state<AdminBinary[]>([]);
+	let manageError = $state<string | null>(null);
+	let manageStatus = $state<string | null>(null);
+	let loading = $state(false);
+
+	async function loadBinaries() {
+		manageError = null;
+		loading = true;
+		try {
+			const res = await fetch('/api/admin/binaries', {
+				headers: { Authorization: `Basic ${btoa(`admin:${password}`)}` }
+			});
+			if (!res.ok) {
+				manageError = 'Failed to load — check password';
+				return;
+			}
+			const data = await res.json();
+			adminBinaries = data.binaries;
+		} finally {
+			loading = false;
+		}
+	}
+
+	async function requeue(id: number, label: string) {
+		manageError = null;
+		manageStatus = null;
+		const res = await fetch(`/api/admin/decompilations/${id}/requeue`, {
+			method: 'POST',
+			headers: { Authorization: `Basic ${btoa(`admin:${password}`)}` }
+		});
+		if (res.ok) {
+			manageStatus = `Requeued ${label}`;
+			await loadBinaries();
+		} else {
+			manageError = `Failed to requeue ${label}`;
+		}
+	}
+
+	async function removeBinary(id: number, fileName: string) {
+		if (!confirm(`Delete ${fileName} and all its decompilations?`)) return;
+		manageError = null;
+		manageStatus = null;
+		const res = await fetch(`/api/admin/binaries?id=${id}`, {
+			method: 'DELETE',
+			headers: { Authorization: `Basic ${btoa(`admin:${password}`)}` }
+		});
+		if (res.ok) {
+			manageStatus = `Deleted ${fileName}`;
+			await loadBinaries();
+		} else {
+			manageError = `Failed to delete ${fileName}`;
+		}
+	}
 </script>
 
-<div class="mx-auto max-w-xl space-y-6">
+<div class="mx-auto max-w-5xl space-y-8">
 	<header>
 		<a href="/" class="text-xs text-muted hover:text-fg">← Explorer</a>
 		<h1 class="mt-1 text-xl font-semibold tracking-tight">Admin — upload binary</h1>
@@ -161,4 +224,75 @@
 		{#if status}<p class="text-sm text-ok">{status}</p>{/if}
 		{#if errorMsg}<p class="text-sm text-err">{errorMsg}</p>{/if}
 	</form>
+
+	<section class="space-y-4">
+		<div class="flex items-center justify-between">
+			<h2 class="text-sm font-medium uppercase tracking-wider text-muted">Manage binaries</h2>
+			<button
+				onclick={loadBinaries}
+				disabled={loading}
+				class="rounded-sm border border-border bg-surface-2 px-3 py-1 text-sm text-fg hover:border-accent disabled:opacity-50"
+			>
+				{loading ? 'Loading…' : 'Load binaries'}
+			</button>
+		</div>
+		{#if manageError}<p class="text-sm text-err">{manageError}</p>{/if}
+		{#if manageStatus}<p class="text-sm text-ok">{manageStatus}</p>{/if}
+		{#if adminBinaries.length > 0}
+			<div class="overflow-x-auto rounded-sm border border-border">
+				<table class="w-full border-collapse text-sm">
+					<thead>
+						<tr class="border-b border-border bg-surface text-left">
+							<th class="px-3 py-2 font-medium text-muted">Binary</th>
+							<th class="px-3 py-2 font-medium text-muted">Modes</th>
+							<th class="px-3 py-2 text-right font-medium text-muted">Actions</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each adminBinaries as bin}
+							<tr class="border-b border-border last:border-0">
+								<td class="px-3 py-2">
+									<div class="font-mono text-xs">{bin.fileName}</div>
+									<div class="text-[11px] text-muted">{bin.versionId}/{bin.platformId} · {bin.role}</div>
+								</td>
+								<td class="px-3 py-2">
+									<div class="flex flex-wrap gap-1.5">
+										{#each bin.decompilations as d}
+											<span
+												class="rounded-sm border border-border px-2 py-0.5 font-mono text-[11px] {d.status === 'done'
+													? 'text-ok'
+													: d.status === 'failed'
+														? 'text-err'
+														: 'text-muted'}"
+											>
+												{d.mode} · {d.status}
+											</span>
+										{/each}
+									</div>
+								</td>
+								<td class="px-3 py-2">
+									<div class="flex flex-wrap justify-end gap-1.5">
+										{#each bin.decompilations as d}
+											<button
+												onclick={() => requeue(d.id, `${bin.fileName} (${d.mode})`)}
+												class="rounded-sm border border-border px-2 py-0.5 text-[11px] text-fg hover:border-accent"
+											>
+												rerun {d.mode}
+											</button>
+										{/each}
+										<button
+											onclick={() => removeBinary(bin.id, bin.fileName)}
+											class="rounded-sm border border-err/40 px-2 py-0.5 text-[11px] text-err hover:bg-err/10"
+										>
+											delete
+										</button>
+									</div>
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		{/if}
+	</section>
 </div>

@@ -68,9 +68,12 @@
 			goError = 'No function at this address';
 			return;
 		}
-		const body = (await res.json()) as { function: { id: number }; address: number };
+		const body = (await res.json()) as {
+			function: { id: number; name: string; demangledName: string | null };
+			address: number;
+		};
 		await goto(
-			`/${data.version.id}/${data.platform.id}/${encodeURIComponent(data.binary.fileName)}/${data.decompilation.mode}/fn/${body.function.id}?addr=0x${body.address.toString(16)}`
+			`${base}/fn/${encodeURIComponent(body.function.demangledName ?? body.function.name)}?addr=0x${body.address.toString(16)}`
 		);
 	}
 
@@ -80,8 +83,8 @@
 		`/${data.version.id}/${data.platform.id}/${encodeURIComponent(data.binary.fileName)}/${data.decompilation?.mode ?? ''}`
 	);
 
-	function fnUrl(id: number) {
-		return `${base}/fn/${id}`;
+	function fnUrl(name: string) {
+		return `${base}/fn/${encodeURIComponent(name)}`;
 	}
 
 	async function onSearch(event: SubmitEvent) {
@@ -222,7 +225,7 @@
 					<ul class="mt-2 divide-y divide-border overflow-hidden rounded-sm border border-border bg-surface">
 						{#each data.functions as fn}
 							<li>
-								<a href={fnUrl(fn.id)} class="flex items-baseline gap-3 px-3 py-2 text-sm hover:bg-surface-2">
+								<a href={fnUrl(fn.demangledName ?? fn.name)} class="flex items-baseline gap-3 px-3 py-2 text-sm hover:bg-surface-2">
 									<span class="w-24 shrink-0 text-right font-mono text-[11px] text-muted">
 										0x{fn.address.toString(16)}
 									</span>
@@ -241,7 +244,7 @@
 					<ul class="mt-2 divide-y divide-border overflow-hidden rounded-sm border border-border bg-surface">
 						{#each data.memberUses as use}
 							<li>
-								<a href={fnUrl(use.functionId)} class="flex items-baseline gap-3 px-3 py-2 text-sm hover:bg-surface-2">
+								<a href={fnUrl(use.functionName)} class="flex items-baseline gap-3 px-3 py-2 text-sm hover:bg-surface-2">
 									<span class="font-mono text-xs text-muted">{use.ownerType}::{use.memberName}</span>
 									<span class="truncate font-mono text-fg">{use.functionName}</span>
 								</a>
@@ -258,7 +261,7 @@
 					<ul class="mt-2 divide-y divide-border overflow-hidden rounded-sm border border-border bg-surface">
 						{#each data.callers as caller}
 							<li>
-								<a href={fnUrl(caller.callerId)} class="flex items-baseline gap-3 px-3 py-2 text-sm hover:bg-surface-2">
+								<a href={fnUrl(caller.callerName)} class="flex items-baseline gap-3 px-3 py-2 text-sm hover:bg-surface-2">
 									<span class="font-mono text-xs text-muted">{caller.calleeName}</span>
 									<span class="truncate font-mono text-fg">{caller.callerName}</span>
 								</a>
@@ -301,7 +304,7 @@
 			{#each data.functions as fn}
 				<li>
 					<a
-						href="/{data.version.id}/{data.platform.id}/{encodeURIComponent(data.binary.fileName)}/{data.decompilation.mode}/fn/{fn.id}"
+						href="/{data.version.id}/{data.platform.id}/{encodeURIComponent(data.binary.fileName)}/{data.decompilation.mode}/fn/{encodeURIComponent(fn.demangledName ?? fn.name)}"
 						class="flex items-baseline gap-3 px-3 py-2 text-sm hover:bg-surface-2"
 					>
 						<span class="w-24 shrink-0 text-right font-mono text-[11px] text-muted">

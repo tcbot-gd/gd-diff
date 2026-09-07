@@ -347,6 +347,18 @@ export function findFunctionsByName(
 		.all(decomp.id, name, name) as unknown as FunctionRow[];
 }
 
+export function getFunctionContextByRef(
+	versionId: string,
+	platformId: string,
+	fileName: string,
+	mode: DecompMode,
+	ref: string
+): FunctionContext | null {
+	if (/^\d+$/.test(ref)) return getFunctionContext(Number(ref));
+	const matches = findFunctionsByName(ref, versionId, platformId, fileName, mode);
+	return matches.length > 0 ? getFunctionContext(matches[0].id) : null;
+}
+
 export function findFunctionByAddress(decompilationId: number, address: number): FunctionRow | null {
 	return (
 		(getDb()
@@ -418,4 +430,60 @@ export function findCallers(decompilationId: number, query: string): CallerRow[]
 			LIMIT 200`
 		)
 		.all(decompilationId, pattern) as unknown as CallerRow[];
+}
+
+export interface AdminBinary {
+	id: number;
+	versionId: string;
+	platformId: string;
+	fileName: string;
+	role: string;
+	decompilations: { id: number; mode: string; status: string }[];
+}
+
+export function listBinariesAdmin(): AdminBinary[] {
+	const db = getDb();
+	const binaries = db
+		.prepare(
+			'SELECT id, version_id AS versionId, platform_id AS platformId, file_name AS fileName, role FROM binaries ORDER BY version_id, platform_id, file_name'
+		)
+		.all() as unknown as { id: number; versionId: string; platformId: string; fileName: string; role: string }[];
+	return binaries.map((b) => ({
+		...b,
+		decompilations: db
+			.prepare('SELECT id, mode, status FROM decompilations WHERE binary_id = ? ORDER BY mode')
+			.all(b.id) as unknown as { id: number; mode: string; status: string }[]
+	}));
+}
+
+export function requeueDecompilation(id: number): boolean {
+	const db = getDb();
+	if (!db.prepare('SELECT 1 FROM decompilations WHERE id = ?').get(id)) return false;
+	db.exec('PRAGMA foreign_keys = ON');
+	db.prepare('DELETE FROM function_calls WHERE decompilation_id = ?').run(id);
+	db.prepare('DELETE FROM member_uses WHERE decompilation_id = ?').run(id);
+	db.prepare('DELETE FROM functions WHERE decompilation_id = ?').run(id);
+	db.prepare("UPDATE decompilations SET status = 'pending', progress = NULL, error = NULL WHERE id = ?").run(id);
+	return true;
+}
+
+export interface BinaryDeletion {
+	versionId: string;
+	platformId: string;
+	fileName: string;
+	decompilationIds: number[];
+}
+
+export function deleteBinary(binaryId: number): BinaryDeletion | null {
+	const db = getDb();
+	const bin = db
+		.prepare('SELECT version_id AS versionId, platform_id AS platformId, file_name AS fileName FROM binaries WHERE id = ?')
+		.get(binaryId) as unknown as { versionId: string; platformId: string; fileName: string } | undefined;
+	if (!bin) return null;
+	const decompilationIds = (
+		db.prepare('SELECT id FROM decompilations WHERE binary_id = ?').all(binaryId) as unknown as { id: number }[]
+	).map((r) => r.id);
+	db.exec('PRAGMA foreign_keys = ON');
+	db.prepare('DELETE FROM binaries WHERE id = ?').run(binaryId);
+	return { ...bin, decompilationIds };
 }

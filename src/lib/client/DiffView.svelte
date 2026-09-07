@@ -4,6 +4,8 @@
 	import { EditorState, type Extension } from '@codemirror/state';
 	import { MergeView } from '@codemirror/merge';
 	import { cpp } from '@codemirror/lang-cpp';
+	import { syntaxHighlighting } from '@codemirror/language';
+	import { codeHighlightStyle } from './codeTheme';
 	import CodeReader from './CodeReader.svelte';
 	import { stripCasts } from './casts';
 	import type { FunctionContent, FunctionRow } from '$lib/shared/types';
@@ -48,6 +50,7 @@
 			EditorView.editable.of(false),
 			EditorView.lineWrapping,
 			darkTheme,
+			syntaxHighlighting(codeHighlightStyle),
 			cpp()
 		];
 	}
@@ -82,7 +85,7 @@
 
 	function fnUrl(fn: FnRef): string {
 		if (fn.versionId && fn.platformId && fn.fileName && fn.mode) {
-			return `/${fn.versionId}/${fn.platformId}/${encodeURIComponent(fn.fileName)}/${fn.mode}/fn/${fn.id}`;
+			return `/${fn.versionId}/${fn.platformId}/${encodeURIComponent(fn.fileName)}/${fn.mode}/fn/${encodeURIComponent(fn.demangledName ?? fn.name)}`;
 		}
 		return '';
 	}

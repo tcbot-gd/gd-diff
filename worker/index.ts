@@ -1,5 +1,14 @@
-import { spawn } from 'node:child_process';
-import { mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, copyFileSync } from 'node:fs';
+import { spawn, execSync } from 'node:child_process';
+import {
+	mkdirSync,
+	writeFileSync,
+	readFileSync,
+	existsSync,
+	readdirSync,
+	copyFileSync,
+	cpSync,
+	rmSync
+} from 'node:fs';
 import path from 'node:path';
 import { getDb } from '../src/lib/server/db';
 import { env } from '../src/lib/server/env';
@@ -66,8 +75,12 @@ function claimPending(): PendingDecomp | null {
 	return row;
 }
 
+function idaUserDir(): string {
+	return env.idaUsr || path.join(config.dataDir, 'ida-user');
+}
+
 function ensureIdaUserDir(): string {
-	const dir = path.join(config.dataDir, 'ida-user');
+	const dir = idaUserDir();
 	mkdirSync(path.join(dir, 'cfg'), { recursive: true });
 	writeFileSync(path.join(dir, 'cfg', 'hexrays.cfg'), HEXRAYS_OVERRIDE);
 	return dir;
@@ -238,7 +251,61 @@ async function processNext(): Promise<boolean> {
 	return true;
 }
 
+function sh(cmd: string): void {
+	execSync(cmd, { stdio: 'inherit' });
+}
+
+function ensureBindings(): void {
+	if (!env.bindingsRepoUrl || !config.bindingsDir) return;
+	if (existsSync(path.join(config.bindingsDir, 'bindings'))) return;
+	mkdirSync(config.bindingsDir, { recursive: true });
+	console.log(`[worker] cloning bindings: ${env.bindingsRepoUrl}`);
+	sh(`git clone --depth 1 ${env.bindingsRepoUrl} ${config.bindingsDir}`);
+	if (env.bindingsCommit) sh(`git -C ${config.bindingsDir} checkout ${env.bindingsCommit}`);
+}
+
+function ensureBromaIda(): void {
+	if (!env.bromaRepoUrl || !env.bromaPluginDir) return;
+	if (existsSync(path.join(env.bromaPluginDir, 'BromaIDA.py'))) return;
+	mkdirSync(env.bromaPluginDir, { recursive: true });
+	const tmp = path.join(config.dataDir, '.bromaida-tmp');
+	rmSync(tmp, { recursive: true, force: true });
+	console.log(`[worker] installing BromaIDA: ${env.bromaRepoUrl}`);
+	sh(`git clone --depth 1 ${env.bromaRepoUrl} ${tmp}`);
+	sh(`python3 -m pip install --break-system-packages --no-cache-dir -r ${path.join(tmp, 'requirements.txt')}`);
+	cpSync(path.join(tmp, 'BromaIDA.py'), path.join(env.bromaPluginDir, 'BromaIDA.py'));
+	cpSync(path.join(tmp, 'broma_ida'), path.join(env.bromaPluginDir, 'broma_ida'), { recursive: true });
+	rmSync(tmp, { recursive: true, force: true });
+}
+
+function ensureIdaInstall(): void {
+	if (!env.idaHostDir || !env.idaDir) return;
+	if (existsSync(path.join(env.idaDir, 'idat'))) return;
+	mkdirSync(env.idaDir, { recursive: true });
+	console.log(`[worker] copying IDA ${env.idaHostDir} -> ${env.idaDir}`);
+	cpSync(env.idaHostDir, env.idaDir, { recursive: true });
+}
+
+function acceptIdaEula(): void {
+	const dir = idaUserDir();
+	mkdirSync(dir, { recursive: true });
+	const marker = path.join(dir, '.idapro_eula');
+	if (!existsSync(marker)) writeFileSync(marker, 'accepted\n');
+}
+
+function setup(): void {
+	try {
+		ensureBindings();
+		ensureBromaIda();
+		ensureIdaInstall();
+		acceptIdaEula();
+	} catch (error) {
+		console.error('[worker] setup error (continuing):', error);
+	}
+}
+
 async function loop(): Promise<void> {
+	setup();
 	console.log('[worker] starting');
 	for (;;) {
 		try {

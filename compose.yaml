@@ -1,6 +1,8 @@
 services:
   app:
-    build: .
+    build:
+      context: .
+      target: app
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -9,34 +11,55 @@ services:
       DATA_DIR: /data
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change-me}
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3000}
+      VIRTUAL_HOST: ${DOMAIN}
+      VIRTUAL_PORT: 3000
+      LETSENCRYPT_HOST: ${DOMAIN}
     volumes:
       - gd-data:/data
-    ports:
-      - "3000:3000"
-    # When fronted by nginx-proxy + acme-companion, drop `ports` above and expose
-    # labels instead, e.g.:
-    #   expose: ["3000"]
-    #   environment:
-    #     VIRTUAL_HOST: ${DOMAIN}
-    #     VIRTUAL_PORT: 3000
-    #     LETSENCRYPT_HOST: ${DOMAIN}
+    expose:
+      - "3000"
+    networks:
+      - nginx-net
 
   worker:
-    build: .
+    build:
+      context: .
+      target: worker
     command: ["bun", "worker/index.ts"]
     restart: unless-stopped
     environment:
       DATA_DIR: /data
+      # IDA is mounted read-only from the host and copied to a writable volume by
+      # the worker on first start (so the install dir stays pristine).
+      IDA_HOST_DIR: /opt/ida-host
+      IDA_DIR: /opt/ida
       IDA_PATH: /opt/ida/idat
-      BROMA_PLUGIN_DIR: /opt/ida/plugins
+      IDAUSR: /opt/ida-user
+      BROMA_PLUGIN_DIR: /opt/ida-user/plugins
+      BROMA_REPO_URL: ${BROMA_REPO_URL:-https://github.com/Stazzical/BromaIDA.git}
+      IDA_LICENSE: keyfile=/run/ida/license.hexlic
       BINDINGS_REPO_URL: ${BINDINGS_REPO_URL:-https://github.com/geode-sdk/bindings}
       BINDINGS_COMMIT: ${BINDINGS_COMMIT:-}
+      BINDINGS_DIR: /bindings
     volumes:
       - gd-data:/data
-      # Provide IDA Pro + BromaIDA plugin here (admin supplied):
-      - ${IDA_HOST_DIR:-./ida}:/opt/ida:ro
+      - ${IDA_HOST_DIR:?IDA_HOST_DIR must be set}:/opt/ida-host:ro
+      - ida-install:/opt/ida
+      - ida-user:/opt/ida-user
+      - ${IDA_LICENSE_PATH:?IDA_LICENSE_PATH must be set}:/run/ida/license.hexlic:ro
+      - bindings:/bindings
     depends_on:
       - app
+    networks:
+      - nginx-net
 
 volumes:
   gd-data:
+  ida-install:
+  ida-user:
+  bindings:
+
+networks:
+  nginx-net:
+    external: true
+

@@ -18,10 +18,10 @@
 	} from '@codemirror/state';
 	import {
 		syntaxHighlighting,
-		defaultHighlightStyle,
 		StreamLanguage
 	} from '@codemirror/language';
 	import { cpp } from '@codemirror/lang-cpp';
+	import { codeHighlightStyle } from './codeTheme';
 	import { x86Assembly } from './x86asm';
 	import { armAssembly } from './armasm';
 
@@ -156,7 +156,7 @@
 	});
 
 	// Syntax highlighting colors tuned for the dark theme.
-	const highlightStyle = syntaxHighlighting(defaultHighlightStyle, { fallback: true });
+	const highlightStyle = syntaxHighlighting(codeHighlightStyle);
 
 	onMount(() => {
 		const extensions: Extension[] = [
