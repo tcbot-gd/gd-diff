@@ -157,41 +157,34 @@ export function listFunctions(
 	options: FunctionListOptions = { limit: 100, offset: 0 }
 ): FunctionRow[] {
 	const { query, limit, offset } = options;
+	const columns = `id, decompilation_id AS decompilationId, name, demangled_name AS demangledName,
+		address, size, type_signature AS typeSignature`;
 	if (query) {
 		const pattern = `%${query}%`;
 		return getDb()
 			.prepare(
-				`SELECT
-					id,
-					decompilation_id AS decompilationId,
-					name,
-					demangled_name AS demangledName,
-					address,
-					size,
-					type_signature AS typeSignature
-				FROM functions
+				`SELECT ${columns} FROM functions
 				WHERE decompilation_id = ? AND (name LIKE ? OR demangled_name LIKE ?)
-				ORDER BY name
+				ORDER BY CASE WHEN substr(name, 1, 1) LIKE '[A-Za-z_]' THEN 0 ELSE 1 END, name
 				LIMIT ? OFFSET ?`
 			)
 			.all(decompilationId, pattern, pattern, limit, offset) as unknown as FunctionRow[];
 	}
 	return getDb()
 		.prepare(
-			`SELECT
-				id,
-				decompilation_id AS decompilationId,
-				name,
-				demangled_name AS demangledName,
-				address,
-				size,
-				type_signature AS typeSignature
-			FROM functions
+			`SELECT ${columns} FROM functions
 			WHERE decompilation_id = ?
-			ORDER BY name
+			ORDER BY CASE WHEN substr(name, 1, 1) LIKE '[A-Za-z_]' THEN 0 ELSE 1 END, name
 			LIMIT ? OFFSET ?`
 		)
 		.all(decompilationId, limit, offset) as unknown as FunctionRow[];
+}
+
+export function countFunctions(decompilationId: number): number {
+	const row = getDb()
+		.prepare('SELECT COUNT(*) AS n FROM functions WHERE decompilation_id = ?')
+		.get(decompilationId) as unknown as { n: number };
+	return row.n;
 }
 
 export function getFunction(id: number): FunctionWithContent | null {

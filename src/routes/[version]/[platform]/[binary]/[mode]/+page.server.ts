@@ -7,7 +7,8 @@ import {
 	getPlatform,
 	getVersion,
 	listDecompilations,
-	listFunctions
+	listFunctions,
+	countFunctions
 } from '$lib/server/repo';
 import { isDecompMode } from '$lib/shared/modes';
 
@@ -26,14 +27,24 @@ export const load: PageServerLoad = ({ params, url }) => {
 	const decompilation = listDecompilations(binary.id).find((d) => d.mode === params.mode) ?? null;
 
 	const q = (url.searchParams.get('q') ?? '').trim();
+	const pageParam = Number(url.searchParams.get('page') ?? '1');
+	const page = Number.isInteger(pageParam) && pageParam > 0 ? pageParam : 1;
+	const pageSize = 100;
 
-	const functions = decompilation
-		? q
-			? listFunctions(decompilation.id, { query: q, limit: 200, offset: 0 })
-			: listFunctions(decompilation.id, { limit: 500, offset: 0 })
-		: [];
+	let functions: ReturnType<typeof listFunctions> = [];
+	let totalFunctions = 0;
+	if (decompilation) {
+		if (q) {
+			functions = listFunctions(decompilation.id, { query: q, limit: 200, offset: 0 });
+			totalFunctions = functions.length;
+		} else {
+			totalFunctions = countFunctions(decompilation.id);
+			functions = listFunctions(decompilation.id, { limit: pageSize, offset: (page - 1) * pageSize });
+		}
+	}
+	const totalPages = Math.max(1, Math.ceil(totalFunctions / pageSize));
 	const memberUses = q && decompilation ? findMemberUses(decompilation.id, q) : [];
 	const callers = q && decompilation ? findCallers(decompilation.id, q) : [];
 
-	return { version, platform, binary, decompilation, functions, memberUses, callers, q };
+	return { version, platform, binary, decompilation, functions, memberUses, callers, q, page, pageSize, totalFunctions, totalPages };
 };

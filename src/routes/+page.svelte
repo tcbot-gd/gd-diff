@@ -60,7 +60,6 @@
 						<tr class="border-b border-border last:border-0 hover:bg-surface/60">
 							<td class="px-3 py-2">
 								<div class="font-mono">{version.id}</div>
-								{#if version.note}<div class="text-[11px] text-muted">{version.note}</div>{/if}
 							</td>
 							{#each data.platforms as platform}
 								{@const status = data.matrix[version.id]?.[platform.id]}

@@ -274,6 +274,29 @@
 	{:else if data.functions.length === 0}
 		<p class="text-sm text-muted">Decompiled, but no functions were indexed.</p>
 	{:else}
+		<div class="flex items-center justify-between text-xs text-muted">
+			<span>
+				{data.totalFunctions.toLocaleString()} functions · page {data.page} of {data.totalPages}
+			</span>
+			{#if data.totalPages > 1}
+				<div class="flex items-center gap-1">
+					<a
+						href={data.page > 1 ? `${base}?page=${data.page - 1}` : undefined}
+						aria-disabled={data.page <= 1}
+						class="rounded-sm border px-2.5 py-1 {data.page <= 1
+							? 'pointer-events-none border-border/50 text-muted/40'
+							: 'border-border text-fg hover:border-accent'}">← Prev</a
+					>
+					<a
+						href={data.page < data.totalPages ? `${base}?page=${data.page + 1}` : undefined}
+						aria-disabled={data.page >= data.totalPages}
+						class="rounded-sm border px-2.5 py-1 {data.page >= data.totalPages
+							? 'pointer-events-none border-border/50 text-muted/40'
+							: 'border-border text-fg hover:border-accent'}">Next →</a
+					>
+				</div>
+			{/if}
+		</div>
 		<ul class="divide-y divide-border overflow-hidden rounded-sm border border-border bg-surface">
 			{#each data.functions as fn}
 				<li>
@@ -284,7 +307,7 @@
 						<span class="w-24 shrink-0 text-right font-mono text-[11px] text-muted">
 							0x{fn.address.toString(16)}
 						</span>
-						<span class="truncate font-mono text-fg">{fn.name}</span>
+						<span class="truncate font-mono text-fg">{fn.demangledName ?? fn.name}</span>
 						<span class="ml-auto shrink-0 text-[11px] text-muted">{fn.size} B</span>
 					</a>
 				</li>

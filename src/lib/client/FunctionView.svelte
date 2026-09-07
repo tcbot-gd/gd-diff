@@ -118,6 +118,12 @@
 	const paneCount = $derived((showPseudocode ? 1 : 0) + (showAsm ? 1 : 0) + (showHex ? 1 : 0));
 	const gridStyle = $derived(`grid-template-columns: repeat(${paneCount}, minmax(0, 1fr))`);
 
+	// Pseudocode hides casts, so syntax highlighting (which would reparse the
+	// edited text) is skipped when casts are hidden to avoid broken spans.
+	const asmLanguage = $derived<'x64' | 'arm'>(
+		['android32', 'android64', 'ios', 'm1'].includes(fn.platformId) ? 'arm' : 'x64'
+	);
+
 	const rva = $derived(fn.imageBase != null ? fn.address - fn.imageBase : null);
 	let copied = $state<string | null>(null);
 
@@ -189,7 +195,7 @@
 				<div class="border-b border-border px-3 py-1.5 text-xs font-medium text-muted">
 					Pseudocode
 				</div>
-				<div class="h-[70vh] p-2">
+				<div class="h-[70vh]">
 					<CodeReader
 						lines={pseudoLines}
 						highlight={pseudoHighlight}
@@ -206,11 +212,12 @@
 				<div class="border-b border-border px-3 py-1.5 text-xs font-medium text-muted">
 					Assembly
 				</div>
-				<div class="h-[70vh] p-2">
+				<div class="h-[70vh]">
 					<CodeReader
 						lines={asmLines}
 						highlight={asmHighlight}
 						onselect={onSelect}
+						language={asmLanguage}
 						baseAddr={fn.address}
 						imageBase={fn.imageBase}
 					/>
@@ -220,7 +227,7 @@
 		{#if showHex}
 			<section class="overflow-hidden rounded-sm border border-border bg-surface">
 				<div class="border-b border-border px-3 py-1.5 text-xs font-medium text-muted">Hex</div>
-				<div class="h-[70vh] p-2">
+				<div class="h-[70vh]">
 					<CodeReader
 						lines={hexLines}
 						highlight={hexHighlight}

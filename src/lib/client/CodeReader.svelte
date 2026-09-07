@@ -6,6 +6,7 @@
 		gutter,
 		GutterMarker,
 		Decoration,
+		highlightActiveLine,
 		type DecorationSet
 	} from '@codemirror/view';
 	import {
@@ -15,7 +16,14 @@
 		RangeSetBuilder,
 		type Extension
 	} from '@codemirror/state';
+	import {
+		syntaxHighlighting,
+		defaultHighlightStyle,
+		StreamLanguage
+	} from '@codemirror/language';
 	import { cpp } from '@codemirror/lang-cpp';
+	import { x86Assembly } from './x86asm';
+	import { armAssembly } from './armasm';
 
 	interface ReaderLine {
 		text: string;
@@ -26,7 +34,7 @@
 		lines: ReaderLine[];
 		highlight: Set<number>;
 		onselect?: (addr: number | null) => void;
-		language?: 'cpp' | 'asm' | 'text';
+		language?: 'cpp' | 'x64' | 'arm' | 'text';
 		baseAddr?: number;
 		imageBase?: number | null;
 	}
@@ -127,22 +135,38 @@
 		'&': { backgroundColor: 'transparent', color: '#dbe1ea' },
 		'.cm-content': { caretColor: '#4c8dff' },
 		'.cm-cursor': { borderLeftColor: '#4c8dff' },
+		'.cm-scroller': { overflow: 'auto', whiteSpace: 'pre' },
 		'.cm-gutters': {
 			backgroundColor: 'transparent',
-			color: '#8a93a6',
+			color: '#5a637a',
 			borderRight: '1px solid #262d3a'
 		},
-		'.cm-activeLine': { backgroundColor: 'rgba(255,255,255,0.03)' }
+		'.cm-lineNumbers .cm-gutterElement': { padding: '0 6px 0 4px', minWidth: '2ch' },
+		'.cm-addr-gutter .cm-gutterElement': {
+			fontSize: '10px',
+			lineHeight: 'inherit',
+			display: 'flex',
+			alignItems: 'center',
+			justifyContent: 'flex-end',
+			padding: '0 8px 0 4px',
+			color: '#5a637a'
+		},
+		'.cm-activeLine': { backgroundColor: 'rgba(255,255,255,0.03)' },
+		'.cm-activeLineGutter': { backgroundColor: 'transparent' }
 	});
+
+	// Syntax highlighting colors tuned for the dark theme.
+	const highlightStyle = syntaxHighlighting(defaultHighlightStyle, { fallback: true });
 
 	onMount(() => {
 		const extensions: Extension[] = [
-			lineNumbers(),
 			addressGutter,
+			lineNumbers(),
+			highlightActiveLine(),
 			highlightField,
+			highlightStyle,
 			EditorState.readOnly.of(true),
 			EditorView.editable.of(false),
-			EditorView.lineWrapping,
 			darkTheme,
 			EditorView.domEventHandlers({
 				contextmenu(event, cmView) {
@@ -158,6 +182,8 @@
 			})
 		];
 		if (language === 'cpp') extensions.push(cpp());
+		else if (language === 'x64') extensions.push(StreamLanguage.define(x86Assembly));
+		else if (language === 'arm') extensions.push(StreamLanguage.define(armAssembly));
 
 		const state = EditorState.create({
 			doc: lines.map((l) => l.text).join('\n'),

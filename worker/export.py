@@ -194,6 +194,10 @@ def export_members(cfunc):
                     ti = ti.get_pointed_object()
                 owner = ti.get_type_name()
                 if not owner:
+                    # Global member refs (e.g. `SomeClass::m_field` where obj is a
+                    # cot_obj) have no base expression type; use the UDT's name.
+                    owner = ida_typeinf.tinfo_t(e.m.get_type()).get_type_name()
+                if not owner:
                     continue
                 udt = ida_typeinf.udt_type_data_t()
                 if not ti.get_udt_details(udt):
