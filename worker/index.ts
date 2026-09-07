@@ -294,11 +294,13 @@ function ensureBromaIda(): void {
 	}
 }
 
-// Verify the python3 interpreter IDA will use (idapyswitch binds it to the same
-// libpython) can import BromaIDA's runtime dependencies. Returns true on success.
+// Verify the Python IDA will use (idapyswitch binds it to the same libpython)
+// can import BromaIDA's actual runtime dependencies. `pygments` was removed from
+// this check: it is not a BromaIDA dependency, and importing it made a healthy
+// install look broken. Returns true on success.
 function bromaImportsOk(): boolean {
 	try {
-		execSync(`python3 -c "import pybroma; import platformdirs; import pygments"`, { stdio: 'ignore' });
+		execSync(`python3 -c "import pybroma; import platformdirs"`, { stdio: 'ignore' });
 		return true;
 	} catch {
 		return false;
