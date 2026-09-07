@@ -326,30 +326,41 @@ function configureIdaPython(): void {
 		return;
 	}
 
-	let pythonCmd = '';
-	for (const candidate of ['python3', 'python']) {
-		try {
-			execSync(`${candidate} --version`, { stdio: 'ignore' });
-			pythonCmd = candidate;
-			break;
-		} catch {
-			// try next
-		}
-	}
-	if (!pythonCmd) {
-		console.warn('[worker] no python3/python on PATH — cannot configure IDAPython');
-		return;
+	// Resolve the path to the actual libpython library. idapyswitch needs the
+	// library path (e.g. .../libpython3.13.so), not the interpreter executable.
+	let libpython = '';
+	try {
+		const result = execSync(
+			`python3 -c "import sysconfig; print(sysconfig.get_config_var('LIBDIR') + '/' + sysconfig.get_config_var('LDLIBRARY'))"`,
+			{ encoding: 'utf-8' }
+		).trim();
+		if (result && !result.includes('None') && result.includes('libpython')) libpython = result;
+	} catch {
+		// python3 missing
 	}
 
-	// "--auto" selects / works out the Python contributed with IDA itself if the
-	// requested path isn't provided. Passing the resolved executable makes the
-	// choice deterministic (works for our user-installed python3 too).
-	try {
-		execSync(`"${idapyswitch}" --auto "${pythonCmd}"`, { stdio: 'ignore' });
-		console.log(`[worker] idapyswitch: bound IDAPython to ${pythonCmd}`);
-	} catch (error) {
-		console.warn(`[worker] idapyswitch failed: ${error instanceof Error ? error.message : String(error)}`);
+	const run = (args: string) => {
+		try {
+			execSync(`"${idapyswitch}" ${args}`, { stdio: 'ignore' });
+			console.log(`[worker] idapyswitch: ${args}`);
+			return true;
+		} catch (error) {
+			console.warn(`[worker] idapyswitch ${args} failed: ${error instanceof Error ? error.message : String(error)}`);
+			return false;
+		}
+	};
+
+	if (libpython) {
+		// Deterministic: point IDA at the exact libpython we installed python deps against.
+		if (run(`--force-path "${libpython}"`)) return;
+	} else {
+		console.warn('[worker] could not resolve libpython path');
 	}
+
+	// Fallback: let idapyswitch scan the filesystem and auto-pick a Python.
+	if (run('--auto-apply')) return;
+
+	console.warn('[worker] IDA Python configuration failed');
 }
 
 function setup(): void {
