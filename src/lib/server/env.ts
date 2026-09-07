@@ -27,6 +27,7 @@ export const env = {
 	adminPassword: readString('ADMIN_PASSWORD', ''),
 	idaPath: readString('IDA_PATH', 'idat.exe'),
 	workerConcurrency: Number(readString('WORKER_CONCURRENCY', '2')),
+	minFreeMemoryMb: Number(readString('MIN_FREE_MEMORY_MB', '2048')),
 	idaUsr: readString('IDAUSR', ''),
 	idaHostDir: readString('IDA_HOST_DIR', ''),
 	idaDir: readString('IDA_DIR', ''),

@@ -26,6 +26,7 @@ services:
     environment:
       DATA_DIR: /data
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-2}
+      MIN_FREE_MEMORY_MB: ${MIN_FREE_MEMORY_MB:-2048}
       IDA_HOST_DIR: /opt/ida-host
       IDA_DIR: /opt/ida
       IDA_PATH: /opt/ida/idat

@@ -480,14 +480,48 @@ async function withIngestLock<T>(fn: () => Promise<T>): Promise<T> {
 	}
 }
 
+function availableMemoryBytes(): number | null {
+	try {
+		const meminfo = readFileSync('/proc/meminfo', 'utf-8');
+		const match = meminfo.match(/MemAvailable:\s+(\d+)\s*kB/);
+		return match ? Number(match[1]) * 1024 : null;
+	} catch {
+		return null; // not Linux (dev machine) — no signal to gate on
+	}
+}
+
+let lowMemoryWarned = false;
+function enoughMemory(): boolean {
+	const free = availableMemoryBytes();
+	if (free === null) return true;
+	const min = env.minFreeMemoryMb * 1024 * 1024;
+	if (free >= min) {
+		lowMemoryWarned = false;
+		return true;
+	}
+	if (!lowMemoryWarned) {
+		console.warn(
+			`[worker] only ${Math.round(free / 1024 / 1024)}MB free (< ${env.minFreeMemoryMb}MB); waiting before starting more IDA jobs`
+		);
+		lowMemoryWarned = true;
+	}
+	return false;
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 async function workerLoop(id: number): Promise<void> {
 	for (;;) {
 		try {
+			if (!enoughMemory()) {
+				await sleep(5000);
+				continue;
+			}
 			const worked = await processNext();
-			if (!worked) await new Promise((resolve) => setTimeout(resolve, 10_000));
+			if (!worked) await sleep(10_000);
 		} catch (error) {
 			console.error(`[worker#${id}] error:`, error);
-			await new Promise((resolve) => setTimeout(resolve, 10_000));
+			await sleep(10_000);
 		}
 	}
 }
