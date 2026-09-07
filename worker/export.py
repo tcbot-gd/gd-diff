@@ -202,7 +202,15 @@ def export_members(cfunc):
                 udt = ida_typeinf.udt_type_data_t()
                 if not ti.get_udt_details(udt):
                     continue
-                name = udt.get_udm_name(e.m)
+                # e.m is the member offset; match it against the UDT member list
+                # (udt_type_data_t is a vector of udm_t, each carrying .offset in
+                # bits). Hex-Rays reports e.m in bits, but tolerate byte offsets too.
+                name = ""
+                for i in range(udt.size()):
+                    udm = udt.at(i)
+                    if udm.offset == e.m or udm.offset // 8 == e.m:
+                        name = udm.name
+                        break
                 if not name:
                     continue
             except Exception:

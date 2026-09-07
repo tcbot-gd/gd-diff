@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
 	import { EditorView } from '@codemirror/view';
 	import { EditorState, type Extension } from '@codemirror/state';
 	import { MergeView } from '@codemirror/merge';
@@ -29,8 +28,8 @@
 	let mode = $state<'diff' | 'side'>('diff');
 	let hideCasts = $state(false);
 
-	let container = $state.raw<HTMLDivElement | undefined>(undefined);
-	let merge = $state.raw<MergeView | undefined>(undefined);
+	let container = $state<HTMLDivElement | undefined>(undefined);
+	let merge: MergeView | undefined = undefined;
 
 	const darkTheme = EditorView.theme({
 		'&': { backgroundColor: 'transparent', color: '#dbe1ea' },
@@ -68,7 +67,7 @@
 	$effect(() => {
 		const kind = what;
 		const m = mode;
-		const el = untrack(() => container);
+		const el = container;
 		merge?.destroy();
 		merge = undefined;
 		if (el && (kind === 'pseudocode' || kind === 'asm') && m === 'diff') {
