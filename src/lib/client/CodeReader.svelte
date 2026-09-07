@@ -37,9 +37,20 @@
 		language?: 'cpp' | 'x64' | 'arm' | 'text';
 		baseAddr?: number;
 		imageBase?: number | null;
+		showAddr?: boolean;
+		hex?: boolean;
 	}
 
-	let { lines, highlight, onselect, language = 'text', baseAddr, imageBase }: Props = $props();
+	let {
+		lines,
+		highlight,
+		onselect,
+		language = 'text',
+		baseAddr,
+		imageBase,
+		showAddr = true,
+		hex = false
+	}: Props = $props();
 
 	let container: HTMLDivElement;
 	let view: EditorView | undefined;
@@ -109,11 +120,25 @@
 	function onContextMenu(event: MouseEvent, cmView: EditorView): boolean {
 		const pos = cmView.posAtCoords({ x: event.clientX, y: event.clientY });
 		if (pos == null) return false;
-		const line = cmView.state.doc.lineAt(pos).number;
-		const addrs = lineAddrs.get(line);
+		const lineObj = cmView.state.doc.lineAt(pos);
+		const addrs = lineAddrs.get(lineObj.number);
 		if (!addrs || addrs.length === 0) return false;
 		event.preventDefault();
-		menu = { x: event.clientX, y: event.clientY, addr: addrs[0] };
+		let addr = addrs[0];
+		if (hex && addrs.length > 1) {
+			// Map the clicked column to a byte index within the hex row so copying
+			// yields the address of the selected byte, not the row's start address.
+			const col = pos - lineObj.from;
+			const sep = lineObj.text.indexOf('  ');
+			const hexLen = sep === -1 ? lineObj.text.length : sep;
+			let byteIdx: number;
+			if (col < hexLen) byteIdx = Math.floor(col / 3);
+			else if (sep !== -1 && col >= sep + 2) byteIdx = col - (sep + 2);
+			else byteIdx = 15;
+			byteIdx = Math.max(0, Math.min(byteIdx, addrs.length - 1));
+			addr = addrs[byteIdx];
+		}
+		menu = { x: event.clientX, y: event.clientY, addr };
 		return true;
 	}
 
@@ -159,8 +184,9 @@
 	const highlightStyle = syntaxHighlighting(codeHighlightStyle);
 
 	onMount(() => {
-		const extensions: Extension[] = [
-			addressGutter,
+		const extensions: Extension[] = [];
+		if (showAddr) extensions.push(addressGutter);
+		extensions.push(
 			lineNumbers(),
 			highlightActiveLine(),
 			highlightField,
@@ -180,7 +206,7 @@
 					onselect?.(addrs && addrs.length ? addrs[0] : null);
 				}
 			})
-		];
+		);
 		if (language === 'cpp') extensions.push(cpp());
 		else if (language === 'x64') extensions.push(StreamLanguage.define(x86Assembly));
 		else if (language === 'arm') extensions.push(StreamLanguage.define(armAssembly));

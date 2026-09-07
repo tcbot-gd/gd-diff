@@ -229,7 +229,7 @@
 									<span class="w-24 shrink-0 text-right font-mono text-[11px] text-muted">
 										0x{fn.address.toString(16)}
 									</span>
-									<span class="truncate font-mono text-fg">{fn.name}</span>
+									<span class="truncate font-mono text-fg">{fn.demangledName ?? fn.name}</span>
 								</a>
 							</li>
 						{/each}

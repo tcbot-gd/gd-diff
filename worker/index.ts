@@ -157,14 +157,32 @@ function runIda(decomp: PendingDecomp, binaryPath: string, fresh: boolean): Prom
 		const done = (error?: Error) => {
 			if (settled) return;
 			settled = true;
+			mirrorProgress();
 			clearInterval(poll);
 			if (error) reject(error);
 			else resolve();
 		};
 		child.on('error', (error) => done(error));
-		child.on('exit', (code) =>
-			done(code === 0 ? undefined : new Error(`IDA exited with code ${code}`))
-		);
+		child.on('exit', (code, signal) => {
+			if (code === 0) {
+				done();
+				return;
+			}
+			// IDA occasionally exits non-zero (or is killed) *after* the export
+			// script has finished writing everything — e.g. a plugin crashing
+			// during shutdown. If the export completed, don't fail the job.
+			if (existsSync(path.join(outDir, 'meta.json'))) {
+				console.warn(
+					`[worker] #${decomp.id} IDA exited ${code ?? 'null'}${signal ? ` (signal ${signal})` : ''} but the export completed; treating as success`
+				);
+				done();
+				return;
+			}
+			const reason = signal
+				? `IDA was killed by signal ${signal}`
+				: `IDA exited with code ${code ?? 'null'}`;
+			done(new Error(reason));
+		});
 	});
 }
 

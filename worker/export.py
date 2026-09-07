@@ -202,9 +202,11 @@ def export_members(cfunc):
                 udt = ida_typeinf.udt_type_data_t()
                 if not ti.get_udt_details(udt):
                     continue
-                # e.m is the member offset; match it against the UDT member list
-                # (udt_type_data_t is a vector of udm_t, each carrying .offset in
-                # bits). Hex-Rays reports e.m in bits, but tolerate byte offsets too.
+                # e.m is the member offset; udm.offset is in bits. Hex-Rays
+                # reports e.m in bits on most targets but bytes on others, so
+                # match both. The `// 8` is a bit→byte conversion (8 bits per
+                # byte on every architecture) — not a pointer-width assumption,
+                # so it holds for armv7 (android32) just like arm64/x64.
                 name = ""
                 for i in range(udt.size()):
                     udm = udt.at(i)
@@ -262,6 +264,12 @@ def apply_broma_bindings():
     bindings_root = os.environ.get("BROMA_BINDINGS_DIR", "")
     version = os.environ.get("IDA_EXPORT_VERSION", "")
     platform = os.environ.get("IDA_EXPORT_PLATFORM", "win")
+
+    # geode-sdk/bindings labels 2.2082 as 2.2081 (a one-off upstream quirk that
+    # will never repeat). 2.2082 binaries have no bindings dir of their own, so
+    # map them to the 2.2081 bindings.
+    if version == "2.2082":
+        version = "2.2081"
 
     if not broma_plugin_dir or not bindings_root or not version:
         raise RuntimeError(

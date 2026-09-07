@@ -43,7 +43,12 @@
 		}))
 	);
 	const hexLines = $derived(
-		(content?.hex ?? []).map((h) => ({ text: `${h.bytes}  ${h.ascii}`, addrs: [h.addr] }))
+		(content?.hex ?? []).map((h) => {
+			const byteCount = h.bytes.split(' ').filter(Boolean).length;
+			const addrs: number[] = [];
+			for (let i = 0; i < byteCount; i++) addrs.push(h.addr + i);
+			return { text: `${h.bytes}  ${h.ascii}`, addrs };
+		})
 	);
 
 	const asmHighlight = $derived(computeAsmHighlight(selectedAddr));
@@ -201,7 +206,7 @@
 						highlight={pseudoHighlight}
 						onselect={onSelect}
 						language="cpp"
-						baseAddr={fn.address}
+						showAddr={false}
 						imageBase={fn.imageBase}
 					/>
 				</div>
@@ -234,6 +239,7 @@
 						onselect={onSelect}
 						baseAddr={fn.address}
 						imageBase={fn.imageBase}
+						hex={true}
 					/>
 				</div>
 			</section>
