@@ -38,21 +38,6 @@ MODE = os.environ.get("IDA_EXPORT_MODE", "raw")
 CALL_MNEMONICS = {"call", "bl", "blx", "blr", "jsr", "brasl", "call.l", "callq"}
 
 
-def configure_decompiler():
-    """Raise decompiler limits so large Geometry Dash functions still decompile.
-
-    The function-size limit lives in hexrays.cfg (MAX_FUNCSIZE, default 64KB); the
-    worker installs a bumped override through $IDAUSR. We additionally try the
-    older flag-based API when present, harmlessly.
-    """
-    try:
-        if hasattr(ida_hexrays, "set_hexrays_flags"):
-            flags = ida_hexrays.get_hexrays_flags()
-            ida_hexrays.set_hexrays_flags(flags | 0x7FFFFFFF)
-    except Exception:
-        pass
-
-
 def demangle(name):
     if not name:
         return None
@@ -148,9 +133,8 @@ def decompile(func):
         return None
 
 def export_pseudocode(cfunc):
-    result = []
     if cfunc is None:
-        return result
+        return
     try:
         lines = cfunc.get_pseudocode()
         for i, sline in enumerate(lines):
@@ -168,10 +152,9 @@ def export_pseudocode(cfunc):
                             break
                 except Exception:
                     continue
-            result.append({"line": i + 1, "text": text, "addrs": addrs})
+            yield {"line": i + 1, "text": text, "addrs": addrs}
     except Exception:
         pass
-    return result
 
 
 def export_members(cfunc):
@@ -375,7 +358,6 @@ def main():
         os.makedirs(OUT, exist_ok=True)
     write_progress("analyzing", 0, None)
 
-    configure_decompiler()
     try:
         ida_hexrays.init_hexrays_plugin()
     except Exception:
@@ -409,19 +391,42 @@ def main():
             # being worked on (a single huge function can take a long time).
             write_progress("decompiling", count, total, name, size)
             cfunc = decompile(func)
-            record = {
-                "name": name,
-                "demangled": demangle(name),
-                "address": func.start_ea,
-                "size": size,
-                "signature": get_signature(func),
-                "asm": export_asm(func),
-                "hex": export_hex(func),
-                "calls": export_calls(func),
-                "pseudocode": export_pseudocode(cfunc),
-                "members": export_members(cfunc),
-            }
-            fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+            # cfunc-dependent exports first (they need the decompilation alive);
+            # the pseudocode is a generator so its full text is never materialized.
+            members = export_members(cfunc)
+            pseudo = export_pseudocode(cfunc)
+
+            # func-only exports (no cfunc required).
+            asm = export_asm(func)
+            hex_ = export_hex(func)
+            calls = export_calls(func)
+
+            # Write the record incrementally instead of building one giant dict +
+            # json.dumps string (which doubled peak memory on huge functions).
+            fh.write('{"name":' + json.dumps(name, ensure_ascii=False))
+            fh.write(',"demangled":' + json.dumps(demangle(name), ensure_ascii=False))
+            fh.write(',"address":' + str(func.start_ea))
+            fh.write(',"size":' + str(size))
+            fh.write(',"signature":' + json.dumps(get_signature(func), ensure_ascii=False))
+            fh.write(',"asm":' + json.dumps(asm, ensure_ascii=False))
+            fh.write(',"hex":' + json.dumps(hex_, ensure_ascii=False))
+            fh.write(',"calls":' + json.dumps(calls, ensure_ascii=False))
+            fh.write(',"pseudocode":[')
+            first = True
+            for line in pseudo:
+                if not first:
+                    fh.write(',')
+                first = False
+                fh.write(json.dumps(line, ensure_ascii=False))
+            fh.write(']')
+            fh.write(',"members":' + json.dumps(members, ensure_ascii=False))
+            fh.write('}\n')
+
+            # Release the decompilation before moving on so a huge function's
+            # ctree/microcode isn't held alongside the next function's.
+            cfunc = None
+            del pseudo, members, asm, hex_, calls
             count += 1
             if count % 100 == 0:
                 print("[export] %d / %d functions" % (count, total))
