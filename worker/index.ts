@@ -267,16 +267,46 @@ function ensureBindings(): void {
 
 function ensureBromaIda(): void {
 	if (!env.bromaRepoUrl || !env.bromaPluginDir) return;
-	if (existsSync(path.join(env.bromaPluginDir, 'BromaIDA.py'))) return;
 	mkdirSync(env.bromaPluginDir, { recursive: true });
-	const tmp = path.join(config.dataDir, '.bromaida-tmp');
-	rmSync(tmp, { recursive: true, force: true });
-	console.log(`[worker] installing BromaIDA: ${env.bromaRepoUrl}`);
-	sh(`git clone --depth 1 ${env.bromaRepoUrl} ${tmp}`);
-	sh(`python3 -m pip install --break-system-packages --no-cache-dir -r ${path.join(tmp, 'requirements.txt')}`);
-	cpSync(path.join(tmp, 'BromaIDA.py'), path.join(env.bromaPluginDir, 'BromaIDA.py'));
-	cpSync(path.join(tmp, 'broma_ida'), path.join(env.bromaPluginDir, 'broma_ida'), { recursive: true });
-	rmSync(tmp, { recursive: true, force: true });
+	const pluginFile = path.join(env.bromaPluginDir, 'BromaIDA.py');
+	const reqFile = path.join(env.bromaPluginDir, 'requirements.txt');
+
+	if (!existsSync(pluginFile)) {
+		console.log(`[worker] installing BromaIDA: ${env.bromaRepoUrl}`);
+		const tmp = path.join(config.dataDir, '.bromaida-tmp');
+		rmSync(tmp, { recursive: true, force: true });
+		sh(`git clone --depth 1 ${env.bromaRepoUrl} ${tmp}`);
+		cpSync(path.join(tmp, 'BromaIDA.py'), pluginFile);
+		cpSync(path.join(tmp, 'broma_ida'), path.join(env.bromaPluginDir, 'broma_ida'), { recursive: true });
+		if (existsSync(path.join(tmp, 'requirements.txt'))) {
+			copyFileSync(path.join(tmp, 'requirements.txt'), reqFile);
+		}
+		rmSync(tmp, { recursive: true, force: true });
+	}
+
+	if (!existsSync(reqFile)) {
+		console.error('[worker] BromaIDA requirements.txt not found — plugin may be incomplete');
+		return;
+	}
+	try {
+		sh(`python3 -m pip install --break-system-packages --no-cache-dir -r "${reqFile}"`);
+	} catch (error) {
+		console.error(
+			'[worker] failed to install BromaIDA Python deps:',
+			error instanceof Error ? error.message : String(error)
+		);
+	}
+}
+
+// Verify the python3 interpreter IDA will use (idapyswitch binds it to the same
+// libpython) can import BromaIDA's runtime dependencies. Returns true on success.
+function bromaImportsOk(): boolean {
+	try {
+		execSync(`python3 -c "import pybroma; import platformdirs; import pygments"`, { stdio: 'ignore' });
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 function ensureIdaInstall(): void {
@@ -364,14 +394,25 @@ function configureIdaPython(): void {
 }
 
 function setup(): void {
-	try {
-		ensureBindings();
-		ensureBromaIda();
-		ensureIdaInstall();
-		acceptIdaEula();
-		configureIdaPython();
-	} catch (error) {
-		console.error('[worker] setup error (continuing):', error);
+	const steps: [string, () => void][] = [
+		['bindings', ensureBindings],
+		['BromaIDA', ensureBromaIda],
+		['IDA install', ensureIdaInstall],
+		['EULA', acceptIdaEula],
+		['IDA Python', configureIdaPython]
+	];
+	for (const [label, fn] of steps) {
+		try {
+			fn();
+		} catch (error) {
+			console.error(`[worker] setup step '${label}' failed:`, error instanceof Error ? error.message : String(error));
+		}
+	}
+
+	if (!bromaImportsOk()) {
+		console.warn(
+			'[worker] BromaIDA Python dependencies are missing in the IDA interpreter — broma decompilations will fail until this is resolved'
+		);
 	}
 }
 
