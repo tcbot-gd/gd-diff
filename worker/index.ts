@@ -14,6 +14,7 @@ import { getDb } from '../src/lib/server/db';
 import { env } from '../src/lib/server/env';
 import { config } from '../src/lib/server/config';
 import { ingestDecompilation } from '../src/lib/server/ingest';
+import { checkWorker, report } from '../src/lib/server/sanity';
 
 const SCRIPT_PATH = path.resolve(import.meta.dir, 'export.py');
 
@@ -305,6 +306,7 @@ function setup(): void {
 }
 
 async function loop(): Promise<void> {
+	if (report('worker', checkWorker())) process.exit(1);
 	setup();
 	console.log('[worker] starting');
 	for (;;) {
