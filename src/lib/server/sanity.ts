@@ -27,7 +27,11 @@ export function checkWorker(): SanityReport {
 	if (!env.idaPath) {
 		fatal.push('IDA_PATH is not set — point it at your headless IDA binary (e.g. /opt/ida/idat).');
 	} else if (!existsSync(env.idaPath)) {
-		fatal.push(`IDA_PATH points to a missing file: ${env.idaPath}`);
+		const hint =
+			env.idaHostDir && env.idaDir
+				? ` — the worker syncs it to IDA_DIR (${env.idaDir}) from IDA_HOST_DIR (${env.idaHostDir}); make sure that mount is populated and IDA_DIR is writable`
+				: '';
+		fatal.push(`IDA_PATH points to a missing file: ${env.idaPath}${hint}`);
 	}
 
 	// data directory

@@ -31,7 +31,7 @@ CMD ["bun", "./build/index.js"]
 # geode-sdk bindings at startup.
 FROM base AS worker
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends python3 python3-dev python3-pip git ca-certificates \
+    && apt-get install -y --no-install-recommends python3 python3-dev python3-pip git rsync ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 CMD ["bun", "worker/index.ts"]
 

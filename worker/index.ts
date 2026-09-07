@@ -281,10 +281,16 @@ function ensureBromaIda(): void {
 
 function ensureIdaInstall(): void {
 	if (!env.idaHostDir || !env.idaDir) return;
-	if (existsSync(path.join(env.idaDir, 'idat'))) return;
 	mkdirSync(env.idaDir, { recursive: true });
-	console.log(`[worker] copying IDA ${env.idaHostDir} -> ${env.idaDir}`);
-	cpSync(env.idaHostDir, env.idaDir, { recursive: true });
+	console.log(`[worker] syncing IDA ${env.idaHostDir} -> ${env.idaDir}`);
+	try {
+		// Incremental; keeps the writable copy in sync with the (read-only) host
+		// mount so an updated IDA install is picked up on the next boot.
+		sh(`rsync -a "${env.idaHostDir}/" "${env.idaDir}/"`);
+	} catch {
+		console.warn('[worker] rsync unavailable, falling back to recursive copy');
+		cpSync(env.idaHostDir, env.idaDir, { recursive: true });
+	}
 }
 
 function acceptIdaEula(): void {
@@ -335,8 +341,8 @@ async function workerLoop(id: number): Promise<void> {
 }
 
 async function loop(): Promise<void> {
-	if (report('worker', checkWorker())) process.exit(1);
 	setup();
+	if (report('worker', checkWorker())) process.exit(1);
 	console.log(`[worker] starting (concurrency ${CONCURRENCY})`);
 	await Promise.all(Array.from({ length: CONCURRENCY }, (_, i) => workerLoop(i)));
 }
