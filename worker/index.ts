@@ -285,10 +285,8 @@ function ensureBromaIda(): void {
 			throw new Error(`requirements.txt not found in ${env.bromaRepoUrl} checkout`);
 		}
 		sh(`python3 -m pip install --break-system-packages --no-cache-dir -r "${reqFile}"`);
-		if (!existsSync(pluginFile)) {
-			cpSync(path.join(tmp, 'BromaIDA.py'), pluginFile);
-			cpSync(path.join(tmp, 'broma_ida'), path.join(env.bromaPluginDir, 'broma_ida'), { recursive: true });
-		}
+		cpSync(path.join(tmp, 'BromaIDA.py'), pluginFile);
+		cpSync(path.join(tmp, 'broma_ida'), path.join(env.bromaPluginDir, 'broma_ida'), { recursive: true });
 	} finally {
 		rmSync(tmp, { recursive: true, force: true });
 	}
