@@ -140,7 +140,10 @@ def export_calls(func):
 
 def decompile(func):
     try:
-        return ida_hexrays.decompile_func(func, None, 0)
+        # DECOMP_NO_CACHE skips the decompilation cache write, which for a huge
+        # function serializes the whole ctree into the IDB and balloons memory.
+        flags = getattr(ida_hexrays, 'DECOMP_NO_CACHE', 0)
+        return ida_hexrays.decompile_func(func, None, flags)
     except Exception:
         return None
 
@@ -194,25 +197,17 @@ def export_members(cfunc):
                     ti = ti.get_pointed_object()
                 owner = ti.get_type_name()
                 if not owner:
-                    # Global member refs (e.g. `SomeClass::m_field` where obj is a
-                    # cot_obj) have no base expression type; use the UDT's name.
-                    owner = ida_typeinf.tinfo_t(e.m.get_type()).get_type_name()
-                if not owner:
                     continue
-                udt = ida_typeinf.udt_type_data_t()
-                if not ti.get_udt_details(udt):
+                # Direct member lookup by offset — no full-struct copy and no
+                # member scan (both blew up memory on huge functions).
+                # get_udm_by_offset / udm.offset use bits; e.m is bits on most
+                # targets, bytes on a few, so try both.
+                idx, udm = ti.get_udm_by_offset(e.m)
+                if (idx == -1 or udm is None) and e.m:
+                    idx, udm = ti.get_udm_by_offset(e.m * 8)
+                if idx == -1 or udm is None:
                     continue
-                # e.m is the member offset; udm.offset is in bits. Hex-Rays
-                # reports e.m in bits on most targets but bytes on others, so
-                # match both. The `// 8` is a bit→byte conversion (8 bits per
-                # byte on every architecture) — not a pointer-width assumption,
-                # so it holds for armv7 (android32) just like arm64/x64.
-                name = ""
-                for i in range(udt.size()):
-                    udm = udt.at(i)
-                    if udm.offset == e.m or udm.offset // 8 == e.m:
-                        name = udm.name
-                        break
+                name = udm.name
                 if not name:
                     continue
             except Exception:
