@@ -25,6 +25,7 @@ export const env = {
 	host: readString('HOST', '0.0.0.0'),
 	port: Number(readString('PORT', '3000')),
 	adminPassword: readString('ADMIN_PASSWORD', ''),
+	downloadPassword: readString('DOWNLOAD_PASSWORD', ''),
 	idaPath: readString('IDA_PATH', 'idat.exe'),
 	workerConcurrency: Number(readString('WORKER_CONCURRENCY', '2')),
 	minFreeMemoryMb: Number(readString('MIN_FREE_MEMORY_MB', '2048')),

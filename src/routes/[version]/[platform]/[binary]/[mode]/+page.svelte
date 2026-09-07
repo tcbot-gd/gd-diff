@@ -92,6 +92,47 @@
 		const q = search.trim();
 		await goto(q ? `${base}?q=${encodeURIComponent(q)}` : base);
 	}
+
+	let dlPassword = $state('');
+	let dlStatus = $state<string | null>(null);
+	let dlError = $state<string | null>(null);
+
+	async function downloadFile(kind: 'binary' | 'raw' | 'broma') {
+		dlStatus = null;
+		dlError = null;
+		if (!dlPassword) {
+			dlError = 'Enter the download password';
+			return;
+		}
+		const params = new URLSearchParams({
+			version: data.version.id,
+			platform: data.platform.id,
+			fileName: data.binary.fileName
+		});
+		const endpoint = kind === 'binary' ? '/api/download/binary' : '/api/download/idb';
+		if (kind !== 'binary') params.set('mode', kind);
+		try {
+			const res = await fetch(`${endpoint}?${params}`, {
+				headers: { Authorization: `Basic ${btoa(`download:${dlPassword}`)}` }
+			});
+			if (!res.ok) {
+				dlError = res.status === 401 ? 'Wrong download password' : 'Nothing to download yet';
+				return;
+			}
+			const blob = await res.blob();
+			const m = res.headers.get('Content-Disposition')?.match(/filename="([^"]*)"/);
+			const filename = m?.[1] ?? (kind === 'binary' ? data.binary.fileName : `${data.binary.fileName}.i64`);
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = filename;
+			a.click();
+			URL.revokeObjectURL(url);
+			dlStatus = `Downloaded ${filename}`;
+		} catch {
+			dlError = 'Download failed';
+		}
+	}
 </script>
 
 <div class="space-y-6">
@@ -147,6 +188,42 @@
 			</form>
 		{/if}
 	</header>
+
+	<details class="rounded-sm border border-border bg-surface">
+		<summary class="cursor-pointer px-3 py-2 text-sm text-muted">Download binary / IDBs</summary>
+		<div class="space-y-3 border-t border-border px-3 py-3">
+			<div class="flex flex-wrap items-center gap-2">
+				<input
+					type="password"
+					bind:value={dlPassword}
+					placeholder="Download password"
+					class="w-64 rounded-sm border border-border bg-surface-2 px-2 py-1 font-mono text-sm text-fg"
+				/>
+			</div>
+			<div class="flex flex-wrap gap-2">
+				<button
+					onclick={() => downloadFile('binary')}
+					class="rounded-sm border border-border bg-surface-2 px-3 py-1 text-sm text-fg hover:border-accent"
+				>
+					Binary
+				</button>
+				<button
+					onclick={() => downloadFile('raw')}
+					class="rounded-sm border border-border bg-surface-2 px-3 py-1 text-sm text-fg hover:border-accent"
+				>
+					Raw IDB
+				</button>
+				<button
+					onclick={() => downloadFile('broma')}
+					class="rounded-sm border border-border bg-surface-2 px-3 py-1 text-sm text-fg hover:border-accent"
+				>
+					Broma IDB
+				</button>
+			</div>
+			{#if dlStatus}<p class="text-xs text-ok">{dlStatus}</p>{/if}
+			{#if dlError}<p class="text-xs text-warn">{dlError}</p>{/if}
+		</div>
+	</details>
 
 	{#if !data.decompilation}
 		<p class="text-sm text-muted">This binary has not been uploaded / decompiled yet.</p>

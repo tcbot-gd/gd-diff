@@ -10,6 +10,7 @@ services:
       PORT: 3000
       DATA_DIR: /data
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change-me}
+      DOWNLOAD_PASSWORD: ${DOWNLOAD_PASSWORD:-change-me}
       PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3000}
       BODY_SIZE_LIMIT: Infinity
     volumes:
