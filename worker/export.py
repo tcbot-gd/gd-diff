@@ -102,7 +102,7 @@ def _is_call_insn(insn):
 
 def export_calls(func):
     result = []
-    seen = set()
+    seen = set()  # dedupe by name so a function called many times appears once
     for ea in idautils.FuncItems(func.start_ea):
         insn = ida_ua.insn_t()
         if ida_ua.decode_insn(insn, ea) == 0:
@@ -111,14 +111,16 @@ def export_calls(func):
         if mnem not in CALL_MNEMONICS and not _is_call_insn(insn):
             continue
         for target in idautils.CodeRefsFrom(ea, 1):
-            if target == BADADDR or target in seen:
+            if target == BADADDR:
                 continue
-            seen.add(target)
             name = (
                 ida_name.get_name(target)
                 or ida_funcs.get_func_name(target)
                 or ("sub_%X" % target)
             )
+            if name in seen:
+                continue
+            seen.add(name)
             result.append({"addr": ea, "target": target, "name": name})
     return result
 
@@ -182,15 +184,15 @@ def export_members(cfunc):
                 if not owner:
                     continue
                 # Direct member lookup by offset — no full-struct copy and no
-                # member scan (both blew up memory on huge functions).
-                # get_udm_by_offset / udm.offset use bits; e.m is bits on most
-                # targets, bytes on a few, so try both.
-                idx, udm = ti.get_udm_by_offset(e.m)
-                if (idx == -1 or udm is None) and e.m:
-                    idx, udm = ti.get_udm_by_offset(e.m * 8)
-                if idx == -1 or udm is None:
-                    continue
-                name = udm.name
+                # member scan (both blew up memory on huge functions). The offset
+                # unit (bits vs bytes) is ambiguous across targets, so try the
+                # likely interpretations.
+                name = ""
+                for off in (e.m, e.m * 8, e.m // 8):
+                    idx, udm = ti.get_udm_by_offset(off)
+                    if idx != -1 and udm is not None and udm.name:
+                        name = udm.name
+                        break
                 if not name:
                     continue
             except Exception:
