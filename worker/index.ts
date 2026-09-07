@@ -321,11 +321,30 @@ function ensureIdaInstall(): void {
 	}
 }
 
+function idaInstallDir(): string {
+	return env.idaDir || (env.idaPath ? path.dirname(env.idaPath) : '');
+}
+
 function acceptIdaEula(): void {
+	const idaDir = idaInstallDir();
+	if (!idaDir) {
+		console.warn('[worker] cannot accept IDA EULA: no IDA_DIR/IDA_PATH configured');
+		return;
+	}
 	const dir = idaUserDir();
 	mkdirSync(dir, { recursive: true });
-	const marker = path.join(dir, '.idapro_eula');
-	if (!existsSync(marker)) writeFileSync(marker, 'accepted\n');
+	const script = path.resolve(import.meta.dir, 'accept_eula.py');
+	try {
+		execSync(`python3 "${script}" "${idaDir}"`, {
+			stdio: 'inherit',
+			env: { ...process.env, IDAUSR: dir }
+		});
+	} catch (error) {
+		console.error(
+			'[worker] failed to accept IDA EULA:',
+			error instanceof Error ? error.message : String(error)
+		);
+	}
 }
 
 function configureIdaPython(): void {
