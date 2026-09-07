@@ -114,6 +114,7 @@ export function initDb(): DatabaseSync {
 	const database = new DatabaseSync(config.dbPath);
 	database.exec('PRAGMA journal_mode = WAL;');
 	database.exec('PRAGMA foreign_keys = ON;');
+	database.exec('PRAGMA busy_timeout = 10000;');
 	database.exec(SCHEMA);
 	migrate(database);
 	seed(database);

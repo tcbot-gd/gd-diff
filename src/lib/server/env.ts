@@ -26,6 +26,7 @@ export const env = {
 	port: Number(readString('PORT', '3000')),
 	adminPassword: readString('ADMIN_PASSWORD', ''),
 	idaPath: readString('IDA_PATH', 'idat.exe'),
+	workerConcurrency: Number(readString('WORKER_CONCURRENCY', '2')),
 	idaUsr: readString('IDAUSR', ''),
 	idaHostDir: readString('IDA_HOST_DIR', ''),
 	idaDir: readString('IDA_DIR', ''),

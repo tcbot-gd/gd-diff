@@ -1,0 +1,23 @@
+# Optional nginx-proxy integration.
+#
+# Usage:
+#   docker compose -f compose.yaml -f compose.nginx.yml up -d
+#
+# Requires the external proxy network to already exist (created by nginx-proxy /
+# acme-companion). The network name is configurable via NGINX_NETWORK in .env.
+services:
+  app:
+    ports: !reset []
+    expose:
+      - "3000"
+    environment:
+      VIRTUAL_HOST: ${DOMAIN}
+      VIRTUAL_PORT: "3000"
+      LETSENCRYPT_HOST: ${DOMAIN}
+    networks:
+      - proxy
+
+networks:
+  proxy:
+    external: true
+    name: ${NGINX_NETWORK:-nginx-proxy}

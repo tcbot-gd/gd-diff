@@ -197,6 +197,16 @@
 	$effect(() => {
 		if (view) view.dispatch({ effects: setHighlights.of(computeDecorations(highlight)) });
 	});
+
+	$effect(() => {
+		if (!view) return;
+		lineAddrs.clear();
+		lines.forEach((line, i) => lineAddrs.set(i + 1, line.addrs));
+		const nextDoc = lines.map((l) => l.text).join('\n');
+		if (nextDoc !== view.state.doc.toString()) {
+			view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: nextDoc } });
+		}
+	});
 </script>
 
 <svelte:window onclick={() => (menu = null)} />

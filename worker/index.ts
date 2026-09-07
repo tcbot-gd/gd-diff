@@ -236,7 +236,7 @@ async function processNext(): Promise<boolean> {
 		await runIda(decomp, binaryPath, fresh);
 		const ndjson = path.join(outDir, 'functions.ndjson');
 		const imageBase = readImageBase(path.join(outDir, 'meta.json'));
-		const count = await ingestDecompilation(decomp.id, ndjson, imageBase);
+		const count = await withIngestLock(() => ingestDecompilation(decomp.id, ndjson, imageBase));
 		console.log(`[worker] done #${decomp.id}: ${count} functions`);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
@@ -305,19 +305,40 @@ function setup(): void {
 	}
 }
 
-async function loop(): Promise<void> {
-	if (report('worker', checkWorker())) process.exit(1);
-	setup();
-	console.log('[worker] starting');
+const CONCURRENCY = Math.max(1, Number.isFinite(env.workerConcurrency) ? Math.floor(env.workerConcurrency) : 2);
+
+// `ingestDecompilation` opens a multi-statement transaction; serialize it so
+// concurrent workers don't collide on the single SQLite writer.
+let ingestLock: Promise<void> = Promise.resolve();
+async function withIngestLock<T>(fn: () => Promise<T>): Promise<T> {
+	const prev = ingestLock;
+	let release!: () => void;
+	ingestLock = new Promise((resolve) => (release = resolve));
+	await prev;
+	try {
+		return await fn();
+	} finally {
+		release();
+	}
+}
+
+async function workerLoop(id: number): Promise<void> {
 	for (;;) {
 		try {
 			const worked = await processNext();
 			if (!worked) await new Promise((resolve) => setTimeout(resolve, 10_000));
 		} catch (error) {
-			console.error('[worker] error:', error);
+			console.error(`[worker#${id}] error:`, error);
 			await new Promise((resolve) => setTimeout(resolve, 10_000));
 		}
 	}
+}
+
+async function loop(): Promise<void> {
+	if (report('worker', checkWorker())) process.exit(1);
+	setup();
+	console.log(`[worker] starting (concurrency ${CONCURRENCY})`);
+	await Promise.all(Array.from({ length: CONCURRENCY }, (_, i) => workerLoop(i)));
 }
 
 loop();
