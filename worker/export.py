@@ -168,6 +168,31 @@ def export_members(cfunc):
         lvars = cfunc.get_lvars()
     except Exception:
         lvars = []
+
+    # Per-function cache: struct type name -> {member offset (bits): member name}.
+    # get_udt_details copies the whole struct, so do it once per type instead of
+    # once per member access (the per-access copy is what blew up memory before).
+    member_cache = {}
+
+    def member_name(ti, offset):
+        key = ti.get_type_name()
+        if not key:
+            return ""
+        mapping = member_cache.get(key)
+        if mapping is None:
+            mapping = {}
+            try:
+                udt = ida_typeinf.udt_type_data_t()
+                if ti.get_udt_details(udt):
+                    for i in range(udt.size()):
+                        udm = udt.at(i)
+                        mapping[udm.offset] = udm.name
+            except Exception:
+                pass
+            member_cache[key] = mapping
+        # udm.offset is in bits; e.m may be bits or bytes.
+        return mapping.get(offset) or mapping.get(offset * 8) or ""
+
     try:
         for item in cfunc.treeitems:
             if not item.is_expr():
@@ -177,22 +202,15 @@ def export_members(cfunc):
                 continue
             try:
                 obj = e.x
+                if obj is None:
+                    continue
                 ti = obj.type
                 if e.op == ida_hexrays.cot_memptr and ti.is_ptr():
                     ti = ti.get_pointed_object()
                 owner = ti.get_type_name()
                 if not owner:
                     continue
-                # Direct member lookup by offset — no full-struct copy and no
-                # member scan (both blew up memory on huge functions). The offset
-                # unit (bits vs bytes) is ambiguous across targets, so try the
-                # likely interpretations.
-                name = ""
-                for off in (e.m, e.m * 8, e.m // 8):
-                    idx, udm = ti.get_udm_by_offset(off)
-                    if idx != -1 and udm is not None and udm.name:
-                        name = udm.name
-                        break
+                name = member_name(ti, e.m)
                 if not name:
                     continue
             except Exception:
@@ -378,6 +396,7 @@ def main():
 
     ndjson_path = os.path.join(OUT, "functions.ndjson")
     count = 0
+    member_total = 0
     with open(ndjson_path, "w", encoding="utf-8") as fh:
         for ea in funcs:
             func = ida_funcs.get_func(ea)
@@ -397,6 +416,7 @@ def main():
             # cfunc-dependent exports first (they need the decompilation alive);
             # the pseudocode is a generator so its full text is never materialized.
             members = export_members(cfunc)
+            member_total += len(members)
             pseudo = export_pseudocode(cfunc)
 
             # func-only exports (no cfunc required).
@@ -453,6 +473,7 @@ def main():
 
     write_progress("done", count, total)
     print("[export] wrote %d functions to %s" % (count, ndjson_path))
+    print("[export] extracted %d member uses across %d functions" % (member_total, count))
     qexit(0)
 
 
