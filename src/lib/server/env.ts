@@ -29,6 +29,7 @@ export const env = {
 	idaPath: readString('IDA_PATH', 'idat.exe'),
 	workerConcurrency: Number(readString('WORKER_CONCURRENCY', '2')),
 	minFreeMemoryMb: Number(readString('MIN_FREE_MEMORY_MB', '2048')),
+	maxFuncSizeKb: Number(readString('MAX_FUNCSIZE_KB', '100')),
 	idaUsr: readString('IDAUSR', ''),
 	idaHostDir: readString('IDA_HOST_DIR', ''),
 	idaDir: readString('IDA_DIR', ''),

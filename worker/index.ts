@@ -18,10 +18,15 @@ import { checkWorker, report } from '../src/lib/server/sanity';
 
 const SCRIPT_PATH = path.resolve(import.meta.dir, 'export.py');
 
-const HEXRAYS_OVERRIDE = `// gd-diff override: raise limits so large Geometry Dash functions still decompile
-MAX_FUNCSIZE = 1000000000
+function hexraysOverride(): string {
+	// MAX_FUNCSIZE is in KB (IDA's unit): 64 = 64KB. Default to a safe 100KB so
+	// a handful of pathological functions don't OOM the box; raise it to
+	// decompile everything (1000000000 = ~unlimited).
+	return `// gd-diff override
+MAX_FUNCSIZE = ${env.maxFuncSizeKb}
 MAX_FUNC_ARGS = 10000
 `;
+}
 
 interface PendingDecomp {
 	id: number;
@@ -83,7 +88,7 @@ function idaUserDir(): string {
 function ensureIdaUserDir(): string {
 	const dir = idaUserDir();
 	mkdirSync(path.join(dir, 'cfg'), { recursive: true });
-	writeFileSync(path.join(dir, 'cfg', 'hexrays.cfg'), HEXRAYS_OVERRIDE);
+	writeFileSync(path.join(dir, 'cfg', 'hexrays.cfg'), hexraysOverride());
 	return dir;
 }
 
