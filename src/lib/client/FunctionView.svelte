@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
+	import { untrack, onMount } from 'svelte';
 	import CodeReader from './CodeReader.svelte';
 	import { PLATFORMS } from '$lib/shared/platforms';
 	import { stripCasts } from './casts';
+	import { readCookie, writeCookie } from './prefs';
 	import type { FunctionContent } from '$lib/shared/types';
 
 	interface Props {
@@ -30,6 +31,31 @@
 	let showHex = $state(false);
 	let hideCasts = $state(false);
 	let selectedAddr = $state<number | null>(untrack(() => initialAddr));
+	let prefsReady = $state(false);
+
+	onMount(() => {
+		const saved = readCookie('view');
+		if (saved) {
+			try {
+				const p = JSON.parse(saved);
+				if (typeof p.pseudocode === 'boolean') showPseudocode = p.pseudocode;
+				if (typeof p.asm === 'boolean') showAsm = p.asm;
+				if (typeof p.hex === 'boolean') showHex = p.hex;
+				if (typeof p.hideCasts === 'boolean') hideCasts = p.hideCasts;
+			} catch {
+				// malformed cookie — ignore
+			}
+		}
+		prefsReady = true;
+	});
+
+	$effect(() => {
+		if (!prefsReady) return;
+		writeCookie(
+			'view',
+			JSON.stringify({ pseudocode: showPseudocode, asm: showAsm, hex: showHex, hideCasts })
+		);
+	});
 
 	const content = $derived(fn.content);
 

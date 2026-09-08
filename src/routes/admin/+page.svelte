@@ -17,10 +17,8 @@
 	const useCustom = $derived(binaryIndex === binaries.length);
 
 	function reset() {
-		version = '';
-		binaryIndex = 0;
-		customFile = '';
-		customRole = '';
+		// Only clear the picked file so the next upload can reuse version /
+		// platform / role. Everything else is kept for batch uploads.
 		file = null;
 	}
 
