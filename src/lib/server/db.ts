@@ -84,6 +84,7 @@ CREATE TABLE IF NOT EXISTS function_calls (
 	UNIQUE (decompilation_id, caller_id, callee_address)
 );
 CREATE INDEX IF NOT EXISTS idx_calls_callee ON function_calls (decompilation_id, callee_name);
+CREATE INDEX IF NOT EXISTS idx_calls_caller ON function_calls (caller_id);
 
 CREATE TABLE IF NOT EXISTS member_uses (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -95,6 +96,7 @@ CREATE TABLE IF NOT EXISTS member_uses (
 	UNIQUE (decompilation_id, function_id, owner_type, member_name)
 );
 CREATE INDEX IF NOT EXISTS idx_members_lookup ON member_uses (decompilation_id, owner_type, member_name);
+CREATE INDEX IF NOT EXISTS idx_members_function ON member_uses (function_id);
 
 CREATE TABLE IF NOT EXISTS function_content (
 	function_id INTEGER PRIMARY KEY REFERENCES functions(id) ON DELETE CASCADE,

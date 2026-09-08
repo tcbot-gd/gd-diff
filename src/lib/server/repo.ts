@@ -489,10 +489,17 @@ export function requeueDecompilation(id: number): boolean {
 	const db = getDb();
 	if (!db.prepare('SELECT 1 FROM decompilations WHERE id = ?').get(id)) return false;
 	db.exec('PRAGMA foreign_keys = ON');
-	db.prepare('DELETE FROM function_calls WHERE decompilation_id = ?').run(id);
-	db.prepare('DELETE FROM member_uses WHERE decompilation_id = ?').run(id);
-	db.prepare('DELETE FROM functions WHERE decompilation_id = ?').run(id);
-	db.prepare("UPDATE decompilations SET status = 'pending', progress = NULL, error = NULL WHERE id = ?").run(id);
+	db.exec('BEGIN');
+	try {
+		db.prepare('DELETE FROM function_calls WHERE decompilation_id = ?').run(id);
+		db.prepare('DELETE FROM member_uses WHERE decompilation_id = ?').run(id);
+		db.prepare('DELETE FROM functions WHERE decompilation_id = ?').run(id);
+		db.prepare("UPDATE decompilations SET status = 'pending', progress = NULL, error = NULL WHERE id = ?").run(id);
+		db.exec('COMMIT');
+	} catch (error) {
+		db.exec('ROLLBACK');
+		throw error;
+	}
 	return true;
 }
 
