@@ -394,7 +394,7 @@ export function findMemberUses(decompilationId: number, query: string): MemberUs
 		.prepare(
 			`SELECT
 				mu.function_id AS functionId,
-				f.name AS functionName,
+				COALESCE(f.demangled_name, f.name) AS functionName,
 				mu.owner_type AS ownerType,
 				mu.member_name AS memberName,
 				mu.member_kind AS memberKind
@@ -420,11 +420,12 @@ export function findCallers(decompilationId: number, query: string): CallerRow[]
 		.prepare(
 			`SELECT
 				fc.caller_id AS callerId,
-				f.name AS callerName,
-				fc.callee_name AS calleeName,
+				COALESCE(f.demangled_name, f.name) AS callerName,
+				COALESCE(g.demangled_name, fc.callee_name) AS calleeName,
 				fc.callee_address AS calleeAddress
 			FROM function_calls fc
 			JOIN functions f ON f.id = fc.caller_id
+			LEFT JOIN functions g ON g.decompilation_id = fc.decompilation_id AND g.address = fc.callee_address
 			WHERE fc.decompilation_id = ? AND fc.callee_name LIKE ?
 			ORDER BY fc.callee_name, f.name
 			LIMIT 200`
