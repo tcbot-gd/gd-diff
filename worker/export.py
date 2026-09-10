@@ -159,6 +159,26 @@ def export_pseudocode(cfunc):
         pass
 
 
+# Fallback for member names that the typed lookup can't resolve (opaque or
+# unnamed struct copies): parse `obj->name` / `obj.name` out of the printed
+# text of the expression. Owner becomes whatever printed on the left (e.g.
+# `this` for `this->m_some`, `v13[1]` for `v13[1].__vftable`), and kind is
+# layered on top. Quoted string literals are stripped first so things like
+# "level-2.zip" don't produce fake `.zip` members.
+MEMBER_TEXT_RE = re.compile(
+    r"(?<![.\w])([A-Za-z_][A-Za-z0-9_]*(?:\s*\[[^\]]*\])*)\s*(?:->|\.)\s*([A-Za-z_~][A-Za-z0-9_~]*(?:\s*\[[^\]]*\])*)(?!\w)"
+)
+STRING_LIT_RE = re.compile(r'"[^"\n]*"')
+
+
+def _pointed_type(ti):
+    # cot_memref keeps obj.type as a pointer (and cot_memptr may too); both
+    # need the struct that the member offset is relative to.
+    while ti.is_ptr():
+        ti = ti.get_pointed_object()
+    return ti
+
+
 def export_members(cfunc):
     result = []
     seen = set()
@@ -169,15 +189,15 @@ def export_members(cfunc):
     except Exception:
         lvars = []
 
-    # Per-function cache: struct type name -> {member offset (bits): member name}.
+    # Per-function cache: struct type name -> {member offset in bits: name}.
     # get_udt_details copies the whole struct, so do it once per type instead of
     # once per member access (the per-access copy is what blew up memory before).
     member_cache = {}
 
-    def member_name(ti, offset):
+    def member_mapping(ti):
         key = ti.get_type_name()
         if not key:
-            return ""
+            return {}
         mapping = member_cache.get(key)
         if mapping is None:
             mapping = {}
@@ -186,11 +206,17 @@ def export_members(cfunc):
                 if ti.get_udt_details(udt):
                     for i in range(udt.size()):
                         udm = udt.at(i)
+                        # udm.offset is in bits, but e.m may be in bits or bytes,
+                        # so index by both.
                         mapping[udm.offset] = udm.name
+                        mapping[udm.offset // 8] = udm.name
             except Exception:
                 pass
             member_cache[key] = mapping
-        # udm.offset is in bits; e.m may be bits or bytes.
+        return mapping
+
+    def member_name(ti, offset):
+        mapping = member_mapping(ti)
         return mapping.get(offset) or mapping.get(offset * 8) or ""
 
     try:
@@ -204,9 +230,7 @@ def export_members(cfunc):
                 obj = e.x
                 if obj is None:
                     continue
-                ti = obj.type
-                if e.op == ida_hexrays.cot_memptr and ti.is_ptr():
-                    ti = ti.get_pointed_object()
+                ti = _pointed_type(obj.type)
                 owner = ti.get_type_name()
                 if not owner:
                     continue
@@ -237,6 +261,28 @@ def export_members(cfunc):
                     "addrs": [] if e.ea == BADADDR else [e.ea],
                 }
             )
+    except Exception:
+        pass
+    if result:
+        return result
+
+    # Typed extraction found nothing (opaque / unnamed struct copies). As a
+    # last resort, scan the printed pseudocode (the same text shown in the UI)
+    # for `obj->member` / `obj.member` pairs. The owner is whatever printed on
+    # the left (`this`, `v13`, `PlayerObject::get()`), which is still useful for
+    # grouping member usage even without exact struct types.
+    try:
+        lines = cfunc.get_pseudocode()
+        text = STRING_LIT_RE.sub("", "\n".join(ida_lines.tag_remove(l.line) for l in lines))
+        for owner, name in MEMBER_TEXT_RE.findall(text):
+            if not owner or not name or name.isdigit():
+                continue
+            kind = "this" if owner == "this" else "external"
+            key = (owner, name, kind)
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append({"owner": owner, "name": name, "kind": kind, "addrs": []})
     except Exception:
         pass
     return result
