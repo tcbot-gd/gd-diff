@@ -331,6 +331,43 @@ export function findFunctionsByName(
 	if (!decomp) return [];
 
 	const hasDemangled = demangledName && demangledName !== name;
+
+	// Extract base name (e.g. "Foo::bar" from "Foo::bar(int,float)") for prefix matching
+	// when the exact signature differs between versions.
+	const baseName =
+		hasDemangled && demangledName!.includes('(')
+			? demangledName!.substring(0, demangledName!.indexOf('('))
+			: null;
+	const hasBase = !!baseName && baseName !== name;
+
+	// Build OR conditions: each matching strategy is an alternative.
+	const nameConds = ['name = ?', 'demangled_name = ?'];
+	const params: (string | number)[] = [name, name];
+
+	if (hasDemangled) {
+		nameConds.push('name = ?', 'demangled_name = ?');
+		params.push(demangledName!, demangledName!);
+	}
+
+	if (hasBase) {
+		nameConds.push('demangled_name LIKE ?');
+		params.push(`${baseName}(%`);
+	}
+
+	// Sort: exact mangled match → exact demangled match → base-name prefix match → address
+	let orderExpr: string;
+	if (hasBase) {
+		orderExpr =
+			'CASE WHEN name = ? THEN 0 WHEN demangled_name = ? THEN 1 WHEN demangled_name LIKE ? THEN 2 ELSE 3 END';
+		params.push(name, name, `${baseName}(%`);
+	} else if (hasDemangled) {
+		orderExpr = 'CASE WHEN name = ? THEN 0 WHEN demangled_name = ? THEN 1 ELSE 2 END';
+		params.push(name, name);
+	} else {
+		orderExpr = 'CASE WHEN name = ? THEN 0 ELSE 1 END';
+		params.push(name);
+	}
+
 	return getDb()
 		.prepare(
 			`SELECT
@@ -342,19 +379,11 @@ export function findFunctionsByName(
 				size,
 				type_signature AS typeSignature
 			FROM functions
-			WHERE decompilation_id = ? AND (
-				name = ? OR demangled_name = ?
-				${hasDemangled ? 'OR name = ? OR demangled_name = ?' : ''}
-			)
-			ORDER BY address
+			WHERE decompilation_id = ? AND (${nameConds.join(' OR ')})
+			ORDER BY ${orderExpr}, address
 			LIMIT 50`
 		)
-		.all(
-			decomp.id,
-			name,
-			name,
-			...(hasDemangled ? [demangledName, demangledName] : [])
-		) as unknown as FunctionRow[];
+		.all(decomp.id, ...params) as unknown as FunctionRow[];
 }
 
 export function getFunctionContextByRef(
