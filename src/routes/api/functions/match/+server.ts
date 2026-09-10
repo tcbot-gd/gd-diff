@@ -6,6 +6,7 @@ import { isDecompMode } from '$lib/shared/modes';
 
 export const GET: RequestHandler = ({ url }) => {
 	const name = (url.searchParams.get('name') ?? '').trim();
+	const demangledName = url.searchParams.get('demangledName')?.trim() || null;
 	const version = url.searchParams.get('version') ?? '';
 	const platform = url.searchParams.get('platform') ?? '';
 	const fileName = url.searchParams.get('fileName') ?? '';
@@ -17,6 +18,6 @@ export const GET: RequestHandler = ({ url }) => {
 	if (!fileName) throw error(400, 'fileName is required');
 
 	return json({
-		functions: findFunctionsByName(name, version, platform, fileName, mode)
+		functions: findFunctionsByName(name, version, platform, fileName, mode, demangledName)
 	});
 };

@@ -134,6 +134,7 @@
 			fileName: fn.fileName,
 			mode: fn.mode
 		});
+		if (fn.demangledName) params.set('demangledName', fn.demangledName);
 		const res = await fetch(`/api/functions/match?${params}`);
 		if (!res.ok) {
 			compareError = 'No matches found';

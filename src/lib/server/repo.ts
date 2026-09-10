@@ -322,13 +322,15 @@ export function findFunctionsByName(
 	versionId: string,
 	platformId: string,
 	fileName: string,
-	mode: DecompMode
+	mode: DecompMode,
+	demangledName?: string | null
 ): FunctionRow[] {
 	const binary = getBinaryByRef(versionId, platformId, fileName);
 	if (!binary) return [];
 	const decomp = listDecompilations(binary.id).find((d) => d.mode === mode);
 	if (!decomp) return [];
 
+	const hasDemangled = demangledName && demangledName !== name;
 	return getDb()
 		.prepare(
 			`SELECT
@@ -340,11 +342,19 @@ export function findFunctionsByName(
 				size,
 				type_signature AS typeSignature
 			FROM functions
-			WHERE decompilation_id = ? AND (name = ? OR demangled_name = ?)
+			WHERE decompilation_id = ? AND (
+				name = ? OR demangled_name = ?
+				${hasDemangled ? 'OR name = ? OR demangled_name = ?' : ''}
+			)
 			ORDER BY address
 			LIMIT 50`
 		)
-		.all(decomp.id, name, name) as unknown as FunctionRow[];
+		.all(
+			decomp.id,
+			name,
+			name,
+			...(hasDemangled ? [demangledName, demangledName] : [])
+		) as unknown as FunctionRow[];
 }
 
 export function getFunctionContextByRef(
