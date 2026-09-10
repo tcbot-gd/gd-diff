@@ -17,28 +17,6 @@
 	</section>
 
 	<section class="space-y-3">
-		<h2 class="text-sm font-medium uppercase tracking-wider text-muted">Platforms</h2>
-		<div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-			{#each data.platforms as platform}
-				<div class="rounded-sm border border-border bg-surface p-3">
-					<div class="flex items-center justify-between gap-2">
-						<span class="font-mono text-xs font-semibold text-accent">{platform.id}</span>
-						<span class="text-[11px] text-muted">{platform.arch}</span>
-					</div>
-					<div class="mt-1 text-sm text-fg">{platform.label}</div>
-					<div class="mt-2 space-y-0.5">
-						{#each PLATFORM_BY_ID.get(platform.id)?.binaries ?? [] as binary}
-							<div class="truncate font-mono text-[11px] text-muted" title={binary.fileName}>
-								{binary.fileName}
-							</div>
-						{/each}
-					</div>
-				</div>
-			{/each}
-		</div>
-	</section>
-
-	<section class="space-y-3">
 		<h2 class="text-sm font-medium uppercase tracking-wider text-muted">Versions</h2>
 		<div class="overflow-x-auto rounded-sm border border-border">
 			<table class="w-full border-collapse text-sm">
@@ -67,9 +45,18 @@
 									{#if status?.binaryCount}
 										<a
 											href="/{version.id}/{platform.id}"
-											class="inline-block rounded px-2 py-0.5 font-mono text-[11px] text-ok hover:bg-surface-2"
+											class="inline-flex items-center gap-1.5 rounded border border-ok/30 bg-ok/10 px-2.5 py-1 font-mono text-xs text-ok transition-colors hover:bg-ok/20"
 										>
-											{status.binaryCount} · {status.doneCount}✓
+											{status.doneCount}/{status.binaryCount}
+											{#if status.doneCount === status.binaryCount}
+												<svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor"
+													><path
+														fill-rule="evenodd"
+														d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+														clip-rule="evenodd"
+													/></svg
+												>
+											{/if}
 										</a>
 									{:else}
 										<span class="text-muted/40">—</span>
