@@ -7,19 +7,26 @@ import type { PlatformId } from '../shared/platforms';
 // split it on upload we keep the original so it can be re-downloaded whole.
 const MAC_PLATFORMS: PlatformId[] = ['imac', 'm1'];
 
+/** Resolve a path and verify it stays inside `baseDir`. Prevents path traversal. */
+function safePath(baseDir: string, ...parts: string[]): string | null {
+	const resolved = path.resolve(baseDir, ...parts);
+	if (!resolved.startsWith(baseDir + path.sep) && resolved !== baseDir) return null;
+	return resolved;
+}
+
 export function resolveBinaryPath(versionId: string, platformId: PlatformId, fileName: string): string | null {
 	if (MAC_PLATFORMS.includes(platformId)) {
-		const merged = path.join(config.originalsDir, versionId, fileName);
-		if (existsSync(merged)) return merged;
+		const merged = safePath(config.originalsDir, versionId, fileName);
+		if (merged && existsSync(merged)) return merged;
 	}
-	const thin = path.join(config.uploadsDir, versionId, platformId, fileName);
-	return existsSync(thin) ? thin : null;
+	const thin = safePath(config.uploadsDir, versionId, platformId, fileName);
+	return thin && existsSync(thin) ? thin : null;
 }
 
 function findIdb(dir: string, prefix: string): string | null {
 	for (const ext of ['.i64', '.idb']) {
-		const p = path.join(dir, prefix + ext);
-		if (existsSync(p)) return p;
+		const p = path.resolve(dir, prefix + ext);
+		if (p.startsWith(dir + path.sep) && existsSync(p)) return p;
 	}
 	return null;
 }
@@ -33,7 +40,7 @@ export function resolveIdbPath(
 ): string | null {
 	const dir =
 		mode === 'raw'
-			? path.join(config.uploadsDir, versionId, platformId)
-			: path.join(config.databasesDir, versionId, platformId, fileName, 'broma');
-	return findIdb(dir, fileName);
+			? safePath(config.uploadsDir, versionId, platformId)
+			: safePath(config.databasesDir, versionId, platformId, fileName, 'broma');
+	return dir ? findIdb(dir, fileName) : null;
 }

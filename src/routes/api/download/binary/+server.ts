@@ -24,10 +24,11 @@ export const GET: RequestHandler = ({ request, url }) => {
 
 	const size = statSync(filePath).size;
 	const body = Readable.toWeb(createReadStream(filePath)) as ReadableStream;
+	const safeFileName = path.basename(filePath).replace(/[^a-zA-Z0-9._-]/g, '_');
 	return new Response(body, {
 		headers: {
 			'Content-Type': 'application/octet-stream',
-			'Content-Disposition': `attachment; filename="${path.basename(filePath)}"`,
+			'Content-Disposition': `attachment; filename="${safeFileName}"`,
 			'Content-Length': String(size)
 		}
 	});
