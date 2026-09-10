@@ -3,6 +3,8 @@
 	import CodeReader from './CodeReader.svelte';
 	import { PLATFORMS } from '$lib/shared/platforms';
 	import { stripCasts } from './casts';
+	import { isLocalDecl } from './decls';
+	import { isRealCallName } from './calls';
 	import { readCookie, writeCookie } from './prefs';
 	import type { FunctionContent } from '$lib/shared/types';
 
@@ -30,6 +32,7 @@
 	let showAsm = $state(true);
 	let showHex = $state(false);
 	let hideCasts = $state(false);
+	let hideDecls = $state(true);
 	let selectedAddr = $state<number | null>(untrack(() => initialAddr));
 	let prefsReady = $state(false);
 
@@ -42,6 +45,7 @@
 				if (typeof p.asm === 'boolean') showAsm = p.asm;
 				if (typeof p.hex === 'boolean') showHex = p.hex;
 				if (typeof p.hideCasts === 'boolean') hideCasts = p.hideCasts;
+				if (typeof p.hideDecls === 'boolean') hideDecls = p.hideDecls;
 			} catch {
 				// malformed cookie — ignore
 			}
@@ -53,7 +57,7 @@
 		if (!prefsReady) return;
 		writeCookie(
 			'view',
-			JSON.stringify({ pseudocode: showPseudocode, asm: showAsm, hex: showHex, hideCasts })
+			JSON.stringify({ pseudocode: showPseudocode, asm: showAsm, hex: showHex, hideCasts, hideDecls })
 		);
 	});
 
@@ -63,11 +67,14 @@
 		(content?.asm ?? []).map((i) => ({ text: `${i.mnemonic} ${i.operands}`.trim(), addrs: [i.addr] }))
 	);
 	const pseudoLines = $derived(
-		(content?.pseudocode ?? []).map((p) => ({
-			text: hideCasts ? stripCasts(p.text) : p.text,
-			addrs: p.addrs
-		}))
+		(content?.pseudocode ?? [])
+			.filter((p) => !hideDecls || !isLocalDecl(p.text))
+			.map((p) => ({
+				text: hideCasts ? stripCasts(p.text) : p.text,
+				addrs: p.addrs
+			}))
 	);
+	const filteredCalls = $derived((content?.calls ?? []).filter((c) => isRealCallName(c.name)));
 	const hexLines = $derived(
 		(content?.hex ?? []).map((h) => {
 			const byteCount = h.bytes.split(' ').filter(Boolean).length;
@@ -93,9 +100,12 @@
 	function computePseudoHighlight(addr: number | null): Set<number> {
 		const set = new Set<number>();
 		if (addr == null) return set;
+		// Operate on the (possibly decl-filtered) displayed lines so the highlight
+		// maps to the correct on-screen row.
 		let best = -1;
-		for (const p of content?.pseudocode ?? []) {
-			if (p.addrs.length && p.addrs[0] <= addr) best = p.line;
+		for (let i = 0; i < pseudoLines.length; i++) {
+			const p = pseudoLines[i];
+			if (p.addrs.length && p.addrs[0] <= addr) best = i + 1;
 		}
 		if (best > 0) set.add(best);
 		return set;
@@ -219,6 +229,9 @@
 		<label class="flex items-center gap-1.5">
 			<input type="checkbox" bind:checked={hideCasts} /> Hide casts
 		</label>
+		<label class="flex items-center gap-1.5">
+			<input type="checkbox" bind:checked={hideDecls} /> Hide local declarations
+		</label>
 	</div>
 
 	<div class="grid gap-3" style={gridStyle}>
@@ -312,15 +325,15 @@
 		{/if}
 	</details>
 
-	{#if content && (content.calls.length > 0 || content.members.length > 0)}
+	{#if content && (filteredCalls.length > 0 || content.members.length > 0)}
 		<section class="grid gap-3 md:grid-cols-2">
-			{#if content.calls.length > 0}
+			{#if filteredCalls.length > 0}
 				<div class="rounded-sm border border-border bg-surface p-3">
 					<h3 class="text-xs font-medium uppercase tracking-wider text-muted">
 						Called functions
 					</h3>
 					<ul class="mt-2 space-y-1">
-						{#each content.calls as call}
+						{#each filteredCalls as call}
 							<li>
 								<a
 									href="/{fn.versionId}/{fn.platformId}/{encodeURIComponent(fn.fileName)}/{fn.mode}?q={encodeURIComponent(call.name)}"

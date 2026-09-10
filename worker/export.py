@@ -100,6 +100,11 @@ def _is_call_insn(insn):
         return False
 
 
+def _is_loc_name(name):
+    """True for IDA placeholder names like loc_1234ABCD (local labels for branch targets)."""
+    return name.startswith("loc_")
+
+
 def export_calls(func):
     result = []
     seen = set()  # dedupe by name so a function called many times appears once
@@ -119,6 +124,8 @@ def export_calls(func):
                 or ("sub_%X" % target)
             )
             if name in seen:
+                continue
+            if _is_loc_name(name):
                 continue
             seen.add(name)
             result.append({"addr": ea, "target": target, "name": name})

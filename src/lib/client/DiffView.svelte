@@ -7,6 +7,9 @@
 	import { codeHighlightStyle } from './codeTheme';
 	import CodeReader from './CodeReader.svelte';
 	import { stripCasts } from './casts';
+	import { isLocalDecl } from './decls';
+	import { isRealCallName } from './calls';
+	import { readCookie, writeCookie } from './prefs';
 	import type { FunctionContent, FunctionRow } from '$lib/shared/types';
 
 	interface FnRef extends FunctionRow {
@@ -27,9 +30,44 @@
 	let what = $state<'pseudocode' | 'asm' | 'members' | 'calls'>('pseudocode');
 	let mode = $state<'diff' | 'side'>('diff');
 	let hideCasts = $state(false);
+	let hideDecls = $state(true);
 
 	let container = $state<HTMLDivElement | undefined>(undefined);
 	let merge: MergeView | undefined = undefined;
+
+	// Restore persisted preferences (shared cookie with FunctionView).
+	if (typeof document !== 'undefined') {
+		const saved = readCookie('view');
+		if (saved) {
+			try {
+				const p = JSON.parse(saved);
+				if (typeof p.hideCasts === 'boolean') hideCasts = p.hideCasts;
+				if (typeof p.hideDecls === 'boolean') hideDecls = p.hideDecls;
+			} catch {
+				// malformed
+			}
+		}
+	}
+
+	// Persist toggles back to the shared cookie, preserving other keys (e.g.
+	// pseudocode/asm/hex visibility set elsewhere).
+	let prefsReady = $state(false);
+	$effect(() => {
+		if (!prefsReady) return;
+		const prev = readCookie('view');
+		let merged: Record<string, unknown> = {};
+		try {
+			if (prev) merged = JSON.parse(prev) as Record<string, unknown>;
+		} catch {
+			// malformed
+		}
+		merged.hideCasts = hideCasts;
+		merged.hideDecls = hideDecls;
+		writeCookie('view', JSON.stringify(merged));
+	});
+	// prefsReady is set after the initial sync above so the very first run
+	// doesn't clobber the cookie with defaults before it was read.
+	if (typeof document !== 'undefined') prefsReady = true;
 
 	const darkTheme = EditorView.theme({
 		'&': { backgroundColor: 'transparent', color: '#dbe1ea' },
@@ -57,7 +95,9 @@
 	function text(kind: 'pseudocode' | 'asm', fn: FnRef): string {
 		if (!fn.content) return '// no content';
 		if (kind === 'pseudocode') {
-			const lines = fn.content.pseudocode.map((p) => (hideCasts ? stripCasts(p.text) : p.text));
+			const lines = fn.content.pseudocode
+				.filter((p) => !hideDecls || !isLocalDecl(p.text))
+				.map((p) => (hideCasts ? stripCasts(p.text) : p.text));
 			return lines.length ? lines.join('\n') : '// no pseudocode';
 		}
 		const lines = fn.content.asm.map((i) => `${i.mnemonic} ${i.operands}`.trim());
@@ -71,9 +111,13 @@
 		merge?.destroy();
 		merge = undefined;
 		if (el && (kind === 'pseudocode' || kind === 'asm') && m === 'diff') {
+			// A is the higher (newer) version, B is the lower (older) one.  Put
+			// the older version on the left so the merge reads "B → A": additions
+			// that belong to A (newer) render in green on the right, and lines
+			// only in B render in red on the left.
 			merge = new MergeView({
-				a: { doc: text(kind, a), extensions: readOnlyExtensions() },
-				b: { doc: text(kind, b), extensions: readOnlyExtensions() },
+				a: { doc: text(kind, b), extensions: readOnlyExtensions() },
+				b: { doc: text(kind, a), extensions: readOnlyExtensions() },
 				parent: el
 			});
 		}
@@ -97,10 +141,16 @@
 	const membersOnlyA = $derived(membersA.filter((m) => !membersB.some((x) => memberKey(x) === memberKey(m))));
 	const membersOnlyB = $derived(membersB.filter((m) => !membersA.some((x) => memberKey(x) === memberKey(m))));
 
-	const callsA = $derived(a.content?.calls ?? []);
-	const callsB = $derived(b.content?.calls ?? []);
+	const callsA = $derived((a.content?.calls ?? []).filter((c) => isRealCallName(c.name)));
+	const callsB = $derived((b.content?.calls ?? []).filter((c) => isRealCallName(c.name)));
 	const callsOnlyA = $derived(callsA.filter((c) => !callsB.some((x) => x.name === c.name)));
 	const callsOnlyB = $derived(callsB.filter((c) => !callsA.some((x) => x.name === c.name)));
+
+	function pseudoTextLines(fn: FnRef): { text: string; addrs: number[] }[] {
+		return (fn.content?.pseudocode ?? [])
+			.filter((p) => !hideDecls || !isLocalDecl(p.text))
+			.map((p) => ({ text: hideCasts ? stripCasts(p.text) : p.text, addrs: p.addrs }));
+	}
 
 	function showListDiff(): boolean {
 		return what === 'members' || what === 'calls';
@@ -139,6 +189,9 @@
 				<label class="flex items-center gap-1.5">
 					<input type="checkbox" bind:checked={hideCasts} /> Hide casts
 				</label>
+				<label class="flex items-center gap-1.5">
+					<input type="checkbox" bind:checked={hideDecls} /> Hide local declarations
+				</label>
 			{/if}
 		{/if}
 	</div>
@@ -146,15 +199,17 @@
 	{#if what === 'members' || what === 'calls'}
 		<div class="grid gap-3 md:grid-cols-2">
 			<section class="rounded-sm border border-border bg-surface p-3">
-				<h3 class="text-xs font-medium uppercase tracking-wider text-muted">A — {aName}</h3>
+				<h3 class="text-xs font-medium uppercase tracking-wider text-muted">
+					A added — {aName}
+				</h3>
 				<ul class="mt-2 space-y-1">
 					{#if what === 'members'}
 						{#each membersOnlyA as m}
-							<li class="font-mono text-xs text-err">{m.owner}::{m.name}</li>
+							<li class="font-mono text-xs text-ok">{m.owner}::{m.name}</li>
 						{/each}
 					{:else}
 						{#each callsOnlyA as c}
-							<li class="font-mono text-xs text-err">{c.name}</li>
+							<li class="font-mono text-xs text-ok">{c.name}</li>
 						{/each}
 					{/if}
 				</ul>
@@ -163,15 +218,17 @@
 				{/if}
 			</section>
 			<section class="rounded-sm border border-border bg-surface p-3">
-				<h3 class="text-xs font-medium uppercase tracking-wider text-muted">B — {bName}</h3>
+				<h3 class="text-xs font-medium uppercase tracking-wider text-muted">
+					B removed — {bName}
+				</h3>
 				<ul class="mt-2 space-y-1">
 					{#if what === 'members'}
 						{#each membersOnlyB as m}
-							<li class="font-mono text-xs text-ok">{m.owner}::{m.name}</li>
+							<li class="font-mono text-xs text-err">{m.owner}::{m.name}</li>
 						{/each}
 					{:else}
 						{#each callsOnlyB as c}
-							<li class="font-mono text-xs text-ok">{c.name}</li>
+							<li class="font-mono text-xs text-err">{c.name}</li>
 						{/each}
 					{/if}
 				</ul>
@@ -188,13 +245,13 @@
 		<div class="grid gap-3 md:grid-cols-2">
 			<section class="overflow-hidden rounded-sm border border-border bg-surface">
 				<div class="border-b border-border px-3 py-1.5 text-xs font-medium text-muted">
-					A — {aName}
+					B — {bName} (older)
 				</div>
 				<div class="h-[70vh] p-2">
 					<CodeReader
 						lines={what === 'asm'
-							? (a.content?.asm ?? []).map((i) => ({ text: `${i.mnemonic} ${i.operands}`.trim(), addrs: [i.addr] }))
-							: (a.content?.pseudocode ?? []).map((p) => ({ text: p.text, addrs: p.addrs }))}
+							? (b.content?.asm ?? []).map((i) => ({ text: `${i.mnemonic} ${i.operands}`.trim(), addrs: [i.addr] }))
+							: pseudoTextLines(b)}
 						highlight={new Set()}
 						language={what === 'asm' ? 'text' : 'cpp'}
 					/>
@@ -202,13 +259,13 @@
 			</section>
 			<section class="overflow-hidden rounded-sm border border-border bg-surface">
 				<div class="border-b border-border px-3 py-1.5 text-xs font-medium text-muted">
-					B — {bName}
+					A — {aName} (newer)
 				</div>
 				<div class="h-[70vh] p-2">
 					<CodeReader
 						lines={what === 'asm'
-							? (b.content?.asm ?? []).map((i) => ({ text: `${i.mnemonic} ${i.operands}`.trim(), addrs: [i.addr] }))
-							: (b.content?.pseudocode ?? []).map((p) => ({ text: p.text, addrs: p.addrs }))}
+							? (a.content?.asm ?? []).map((i) => ({ text: `${i.mnemonic} ${i.operands}`.trim(), addrs: [i.addr] }))
+							: pseudoTextLines(a)}
 						highlight={new Set()}
 						language={what === 'asm' ? 'text' : 'cpp'}
 					/>
