@@ -18,6 +18,11 @@ import { checkWorker, report } from '../src/lib/server/sanity';
 
 const SCRIPT_PATH = path.resolve(import.meta.dir, 'export.py');
 
+function pythonSitePackages(): string {
+	const result = execSync(`python3 -c "import site; print(site.getsitepackages()[0])"`, { encoding: 'utf-8' });
+	return result.trim();
+}
+
 function hexraysOverride(): string {
 	// MAX_FUNCSIZE is in KB (IDA's unit): 64 = 64KB. Default to a safe 100KB so
 	// a handful of pathological functions don't OOM the box; raise it to
@@ -119,6 +124,7 @@ function runIda(decomp: PendingDecomp, binaryPath: string, fresh: boolean): Prom
 		const args = ['-A'];
 		if (fresh) args.push('-c');
 		args.push(`-L${logPath}`, `-S${SCRIPT_PATH}`, binaryPath);
+		const pythonPath = pythonSitePackages();
 		const child = spawn(env.idaPath, args, {
 			env: {
 				...process.env,
@@ -128,7 +134,8 @@ function runIda(decomp: PendingDecomp, binaryPath: string, fresh: boolean): Prom
 				IDA_EXPORT_PLATFORM: decomp.platformId,
 				IDA_EXPORT_VERSION: decomp.versionId,
 				BROMA_PLUGIN_DIR: env.bromaPluginDir,
-				BROMA_BINDINGS_DIR: config.bindingsDir
+				BROMA_BINDINGS_DIR: config.bindingsDir,
+				PYTHONPATH: pythonPath
 			},
 			stdio: 'ignore'
 		});
@@ -317,10 +324,11 @@ function ensureBromaIda(): void {
 	}
 }
 
-// Verify the Python IDA will use (idapyswitch binds it to the same libpython)
-// can import BromaIDA's actual runtime dependencies. `pygments` was removed from
-// this check: it is not a BromaIDA dependency, and importing it made a healthy
-// install look broken. Returns true on success.
+// Verify system Python can import BromaIDA's runtime dependencies.
+// `pygments` was removed from this check: it is not a BromaIDA dependency,
+// and importing it made a healthy install look broken.
+// Note: This doesn't verify IDA's Python can import them (PYTHONPATH is set
+// in runIda() to make IDA's Python see system site-packages).
 function bromaImportsOk(): boolean {
 	try {
 		execSync(`python3 -c "import pybroma; import platformdirs"`, { stdio: 'ignore' });
