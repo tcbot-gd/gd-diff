@@ -40,19 +40,17 @@ services:
       BINDINGS_COMMIT: ${BINDINGS_COMMIT:-}
       BINDINGS_DIR: /bindings
     volumes:
-      - gd-data:/data
-      - ${IDA_HOST_DIR:-./ida}:/opt/ida-host:ro
-      - ida-install:/opt/ida
-      - ida-user:/opt/ida-user
-      - ${IDA_LICENSE_PATH:-./license.hexlic}:/run/ida/license.hexlic:ro
-      - bindings:/bindings
+        - gd-data:/data
+        - ${IDA_HOST_DIR:-./ida}:/opt/ida-host:ro
+        - ida-install:/opt/ida
+        - ./ida-user:/opt/ida-user
+        - ${IDA_LICENSE_PATH:-./license.hexlic}:/run/ida/license.hexlic:ro
+        - ./bindings:/bindings
     depends_on:
       - app
-
 volumes:
   gd-data:
   ida-install:
-  ida-user:
-  bindings:
+
 
 
